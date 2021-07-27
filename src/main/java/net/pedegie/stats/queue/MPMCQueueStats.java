@@ -15,11 +15,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class MPMCQueueStats<T> implements Queue<T>, Closeable
 {
-    private final Queue<T> queue;
-    private final ChronicleQueue statsQueue;
-    private final AtomicInteger count = new AtomicInteger(0);
+    protected final Queue<T> queue;
+    protected final ChronicleQueue statsQueue;
+    protected final AtomicInteger count = new AtomicInteger(0);
 
-    private MPMCQueueStats(Queue<T> queue, String fileName, Reader<T> reader)
+    protected MPMCQueueStats(Queue<T> queue, String fileName, Reader<T> reader)
     {
         this.queue = queue;
         this.statsQueue = SingleChronicleQueueBuilder
@@ -28,11 +28,12 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
                 .readOnly(false)
                 .build();
 
-        if(reader != null)
+        if (reader != null)
         {
             Tailers.addTailer(statsQueue.createTailer());
         }
     }
+
     @Override
     public int size()
     {
@@ -210,9 +211,9 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
 
     public static class QueueStatsBuilder<T>
     {
-        private Queue<T> queue;
-        private String fileName;
-        private Reader<T> queueReader;
+        protected Queue<T> queue;
+        protected String fileName;
+        protected Reader<T> queueReader;
 
         public QueueStatsBuilder<T> queue(Queue<T> queue)
         {
@@ -238,12 +239,11 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         }
     }
 
-    private void write(int count, long nanoTime)
+    protected void write(int count, long nanoTime)
     {
-        final ExcerptAppender appender = statsQueue.acquireAppender();
-        appender.writeBytes(b -> b
-                .writeLong(nanoTime)
-                .writeInt(count)
-        );
+        statsQueue.acquireAppender()
+                .writeBytes(b -> b
+                        .writeLong(nanoTime)
+                        .writeInt(count));
     }
 }
