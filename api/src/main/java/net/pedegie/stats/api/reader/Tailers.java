@@ -1,4 +1,4 @@
-package net.pedegie.stats.reader;
+package net.pedegie.stats.api.reader;
 
 import net.openhft.chronicle.core.threads.EventHandler;
 import net.openhft.chronicle.queue.ExcerptTailer;

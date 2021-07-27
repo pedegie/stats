@@ -1,14 +1,9 @@
-package net.pedegie.stats
+package net.pedegie.stats.api.queue
 
 import spock.lang.Specification
 
-class StatsTest extends Specification
+class MPMCQueueStatsTest extends Specification
 {
-    def setup()
-    {
-
-    }
-
     def "test"()
     {
         expect:

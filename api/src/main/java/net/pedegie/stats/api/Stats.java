@@ -1,6 +1,6 @@
-package net.pedegie.stats;
+package net.pedegie.stats.api;
 
-import net.pedegie.stats.queue.MPMCQueueStats;
+import net.pedegie.stats.api.queue.MPMCQueueStats;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.IntStream;

@@ -1,11 +1,10 @@
-package net.pedegie.stats.queue;
+package net.pedegie.stats.api.queue;
 
 import net.openhft.chronicle.queue.ChronicleQueue;
-import net.openhft.chronicle.queue.ExcerptAppender;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.chronicle.wire.WireType;
-import net.pedegie.stats.reader.Reader;
-import net.pedegie.stats.reader.Tailers;
+import net.pedegie.stats.api.reader.Reader;
+import net.pedegie.stats.api.reader.Tailers;
 
 import java.io.Closeable;
 import java.util.Collection;
