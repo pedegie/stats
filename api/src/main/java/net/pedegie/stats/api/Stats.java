@@ -2,6 +2,7 @@ package net.pedegie.stats.api;
 
 import net.pedegie.stats.api.queue.MPMCQueueStats;
 
+import java.nio.file.Paths;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.IntStream;
 
@@ -11,7 +12,7 @@ public class Stats
     {
         var queueStats = MPMCQueueStats.<Integer>builder()
                 .queue(new ConcurrentLinkedQueue<>())
-                .fileName("/home/kacper/kolejka")
+                .fileName(Paths.get(System.getProperty("java.io.tmpdir").toString(), "stats_queue").toAbsolutePath())
                 .queueReader(System.out::println)
                 .build();
 
