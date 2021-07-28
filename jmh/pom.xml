@@ -20,5 +20,9 @@
             <groupId>org.openjdk.jmh</groupId>
             <artifactId>jmh-generator-annprocess</artifactId>
         </dependency>
+        <dependency>
+            <groupId>net.pedegie</groupId>
+            <artifactId>api</artifactId>
+        </dependency>
     </dependencies>
 </project>
