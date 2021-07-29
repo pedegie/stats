@@ -6,6 +6,7 @@ import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.chronicle.wire.WireType;
 import net.pedegie.stats.api.reader.Reader;
 import net.pedegie.stats.api.reader.Tailers;
+import net.pedegie.stats.api.util.BlockSize;
 
 import java.io.Closeable;
 import java.nio.file.Path;
@@ -27,6 +28,8 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
                 .single(fileName.toAbsolutePath().toString())
                 .wireType(WireType.FIELDLESS_BINARY)
                 .readOnly(false)
+              //  .blockSize(BlockSize.blockSize(fileName))
+               // .testBlockSize()
                 .build();
 
         if (reader != null)

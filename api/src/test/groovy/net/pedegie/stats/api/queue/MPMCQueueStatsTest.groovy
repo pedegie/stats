@@ -192,7 +192,7 @@ class MPMCQueueStatsTest extends Specification
                 {
                     if (i % 100 == 0)
                     {
-                        sleep(1)
+                        sleep(4)
                     }
                     mpmcQueueStats.add(i)
                 }

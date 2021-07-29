@@ -32,6 +32,7 @@ public class Tailers
         @Override
         public boolean action()
         {
+            //TODO loop here and create HUB to not allow starvation by single queue
             tailer.readBytes(bytes -> {
                 long a = bytes.readLong();
                 var b = bytes.readInt();
