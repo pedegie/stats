@@ -14,19 +14,21 @@ public class Tailers
         readers.start();
     }
 
-    public static void addTailer(ExcerptTailer tailer)
+    public static void addTailer(ExcerptTailer tailer, Tailer<Long, Integer> reader)
     {
-        readers.addHandler(new TailerHandler(tailer));
+        readers.addHandler(new TailerHandler(tailer, reader));
     }
 
 
     private static class TailerHandler implements EventHandler
     {
         private final ExcerptTailer tailer;
+        private final Tailer<Long,Integer> reader;
 
-        public TailerHandler(ExcerptTailer tailer)
+        public TailerHandler(ExcerptTailer tailer, Tailer<Long,Integer> reader)
         {
             this.tailer = tailer;
+            this.reader = reader;
         }
 
         @Override
@@ -36,7 +38,7 @@ public class Tailers
             tailer.readBytes(bytes -> {
                 long a = bytes.readLong();
                 var b = bytes.readInt();
-                System.out.println("Received: " + a + " " + b);
+                reader.read(a, b);
             });
 
             return false;

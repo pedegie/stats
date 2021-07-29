@@ -13,7 +13,7 @@ public class Stats
         var queueStats = MPMCQueueStats.<Integer>builder()
                 .queue(new ConcurrentLinkedQueue<>())
                 .fileName(Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath())
-                .queueReader(System.out::println)
+                .tailer((aLong, integer) -> System.out.println("Received: " + integer + " - " + aLong))
                 .build();
 
 

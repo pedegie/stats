@@ -1,7 +1,7 @@
 package net.pedegie.stats.api.reader;
 
 @FunctionalInterface
-public interface Reader<T>
+public interface Tailer<T, E>
 {
-    void read(T t);
+    void read(T t, E e);
 }

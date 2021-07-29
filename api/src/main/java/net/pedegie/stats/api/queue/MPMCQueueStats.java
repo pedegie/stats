@@ -4,9 +4,8 @@ import net.openhft.chronicle.core.annotation.ForceInline;
 import net.openhft.chronicle.queue.ChronicleQueue;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.chronicle.wire.WireType;
-import net.pedegie.stats.api.reader.Reader;
+import net.pedegie.stats.api.reader.Tailer;
 import net.pedegie.stats.api.reader.Tailers;
-import net.pedegie.stats.api.util.BlockSize;
 
 import java.io.Closeable;
 import java.nio.file.Path;
@@ -21,7 +20,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     protected final ChronicleQueue statsQueue;
     protected final AtomicInteger count = new AtomicInteger(0);
 
-    protected MPMCQueueStats(Queue<T> queue, Path fileName, Reader<T> reader)
+    protected MPMCQueueStats(Queue<T> queue, Path fileName, Tailer<Long, Integer> tailer)
     {
         this.queue = queue;
         this.statsQueue = SingleChronicleQueueBuilder
@@ -32,9 +31,9 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
                // .testBlockSize()
                 .build();
 
-        if (reader != null)
+        if (tailer != null)
         {
-            Tailers.addTailer(statsQueue.createTailer());
+            Tailers.addTailer(statsQueue.createTailer(), tailer);
         }
     }
 
@@ -222,7 +221,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     {
         protected Queue<T> queue;
         protected Path fileName;
-        protected Reader<T> queueReader;
+        protected Tailer<Long,Integer> tailer;
 
         public QueueStatsBuilder<T> queue(Queue<T> queue)
         {
@@ -236,15 +235,15 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
             return this;
         }
 
-        public QueueStatsBuilder<T> queueReader(Reader<T> queueReader)
+        public QueueStatsBuilder<T> tailer(Tailer<Long,Integer> tailer)
         {
-            this.queueReader = queueReader;
+            this.tailer = tailer;
             return this;
         }
 
         public MPMCQueueStats<T> build()
         {
-            return new MPMCQueueStats<>(queue, fileName, queueReader);
+            return new MPMCQueueStats<>(queue, fileName, tailer);
         }
     }
 
