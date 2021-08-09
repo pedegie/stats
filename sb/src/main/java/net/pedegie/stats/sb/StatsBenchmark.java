@@ -1,30 +1,110 @@
 package net.pedegie.stats.sb;
 
+import net.openhft.chronicle.threads.BusyPauser;
 import net.pedegie.stats.api.queue.MPMCQueueStats;
 import net.pedegie.stats.sb.cli.ProgramArguments;
+import net.pedegie.stats.sb.timeout.Timeout;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+import java.io.File;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import java.util.stream.IntStream;
 
 public class StatsBenchmark
 {
-    public static void main(String[] args)
+    private static final int POISON_PILL = -1;
+    private static final Logger log = LogManager.getLogger(StatsBenchmark.class);
+
+    private static final Path statsQueue = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
+    private static final Timeout BENCHMARK_TIMEOUT = new Timeout(TimeUnit.MILLISECONDS, 10);
+
+    public static void main(String[] args) throws InterruptedException
     {
         var programArguments = ProgramArguments.initialize(args);
+        cleanStatsQueueDirectory();
+        var queueStats = createStatsQueue();
 
-        var queueStats = MPMCQueueStats.<Integer>builder()
+        Runnable putIntegers = () ->
+        {
+            IntStream.range(0, programArguments.getMessagesToSendPerThread()).forEach(value ->
+            {
+                log.debug("Adding {}", value);
+                queueStats.add(value);
+                LockSupport.parkNanos(toNanos(programArguments.getDelayMillisToWaitBetweenMessages()));
+            });
+            queueStats.add(POISON_PILL);
+        };
+
+        Runnable consumeIntegers = () ->
+        {
+            while (true)
+            {
+                var elem = queueStats.poll();
+                if (elem != null)
+                {
+                    log.debug("Consuming {}", elem);
+                    if (elem == POISON_PILL)
+                    {
+                        break;
+                    }
+                } else
+                {
+                    BusyPauser.INSTANCE.pause();
+                }
+
+            }
+        };
+
+        var producerPool = Executors.newFixedThreadPool(programArguments.getProducerThreads());
+        var consumerPool = Executors.newFixedThreadPool(programArguments.getConsumerThreads());
+
+        IntStream.range(0, programArguments.getProducerThreads()).forEach(index -> producerPool.submit(putIntegers));
+        IntStream.range(0, programArguments.getConsumerThreads()).forEach(index -> consumerPool.submit(consumeIntegers));
+
+        producerPool.shutdown();
+        consumerPool.shutdown();
+
+
+        boolean producerTerminated = producerPool.awaitTermination(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
+        boolean consumerTerminated = consumerPool.awaitTermination(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
+
+        if(!(producerTerminated && consumerTerminated))
+        {
+            log.error("Timeouted, hardcoded timeout: {} {}", BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
+            System.exit(1);
+        }
+
+    }
+
+    private static MPMCQueueStats<Integer> createStatsQueue()
+    {
+        return MPMCQueueStats.<Integer>builder()
                 .queue(new ConcurrentLinkedQueue<>())
-                .fileName(Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath())
-                .tailer((aLong, integer) -> System.out.println("Received: " + integer + " - " + aLong))
+                .fileName(statsQueue)
                 .build();
+    }
 
-        
-        Runnable putIntegers = () -> IntStream.range(0, 2500).forEach(value -> {
-            queueStats.add(value);
-            LockSupport.parkNanos(15000000);
-        });
-        putIntegers.run();
+    private static void cleanStatsQueueDirectory()
+    {
+        var dir = new File(statsQueue.toString());
+        File[] files = dir.listFiles();
+        if (files != null)
+        {
+            for (File file : files)
+                if (!file.isDirectory())
+                    file.delete();
+        }
+    }
+
+    private static long toNanos(double delayMillisToWaitBetweenMessages)
+    {
+        return (long) (delayMillisToWaitBetweenMessages * 1000000.0);
     }
 }
