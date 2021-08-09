@@ -22,7 +22,7 @@ public class StatsBenchmark
     private static final Logger log = LogManager.getLogger(StatsBenchmark.class);
 
     private static final Path statsQueue = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
-    private static final Timeout BENCHMARK_TIMEOUT = new Timeout(TimeUnit.MILLISECONDS, 10);
+    private static final Timeout BENCHMARK_TIMEOUT = new Timeout(TimeUnit.SECONDS, 30);
 
     public static void main(String[] args) throws InterruptedException
     {
