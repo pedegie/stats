@@ -10,9 +10,12 @@ import org.apache.logging.log4j.Logger;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.LockSupport;
 import java.util.stream.IntStream;
 
@@ -24,7 +27,7 @@ public class StatsBenchmark
     private static final Path statsQueue = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
     private static final Timeout BENCHMARK_TIMEOUT = new Timeout(TimeUnit.SECONDS, 30);
 
-    public static void main(String[] args) throws InterruptedException
+    public static void main(String[] args) throws InterruptedException, ExecutionException, TimeoutException
     {
         var programArguments = ProgramArguments.initialize(args);
         cleanStatsQueueDirectory();
@@ -64,6 +67,35 @@ public class StatsBenchmark
         var producerPool = Executors.newFixedThreadPool(programArguments.getProducerThreads());
         var consumerPool = Executors.newFixedThreadPool(programArguments.getConsumerThreads());
 
+        for (int i = 0; i < programArguments.getWarmupIterations(); i++)
+        {
+            log.info("Started {} warmup iteration", i + 1);
+
+            CompletableFuture<?> futures[] = new CompletableFuture[programArguments.getProducerThreads() + programArguments.getConsumerThreads()];
+
+            IntStream.range(0, programArguments.getProducerThreads()).forEach(index ->
+            {
+                futures[index] = CompletableFuture.supplyAsync(() ->
+                {
+                    putIntegers.run();
+                    return null;
+                }, producerPool);
+            });
+
+            IntStream.range(programArguments.getProducerThreads(), programArguments.getProducerThreads() + programArguments.getConsumerThreads()).forEach(index ->
+            {
+                futures[index] = CompletableFuture.supplyAsync(() ->
+                {
+                    consumeIntegers.run();
+                    return null;
+                }, consumerPool);
+            });
+
+            CompletableFuture.allOf(futures).get(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
+
+        }
+        log.info("Started real benchmark");
+
         IntStream.range(0, programArguments.getProducerThreads()).forEach(index -> producerPool.submit(putIntegers));
         IntStream.range(0, programArguments.getConsumerThreads()).forEach(index -> consumerPool.submit(consumeIntegers));
 
@@ -74,12 +106,13 @@ public class StatsBenchmark
         boolean producerTerminated = producerPool.awaitTermination(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
         boolean consumerTerminated = consumerPool.awaitTermination(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
 
-        if(!(producerTerminated && consumerTerminated))
+        if (!(producerTerminated && consumerTerminated))
         {
             log.error("Timeouted, hardcoded timeout: {} {}", BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
             System.exit(1);
         }
 
+        log.info("Benchmark finished");
     }
 
     private static MPMCQueueStats<Integer> createStatsQueue()

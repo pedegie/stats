@@ -16,13 +16,15 @@ public class ProgramArguments
     private final int consumerThreads;
     private final int messagesToSendPerThread;
     private final double delayMillisToWaitBetweenMessages;
+    private final int warmupIterations;
 
-    private ProgramArguments(int producerThreads, int consumerThreads, int messagesToSendPerThread, double millisToWaitBetweenMessages)
+    private ProgramArguments(int producerThreads, int consumerThreads, int messagesToSendPerThread, double millisToWaitBetweenMessages, int warmupIterations)
     {
         this.producerThreads = producerThreads;
         this.consumerThreads = consumerThreads;
         this.messagesToSendPerThread = messagesToSendPerThread;
         this.delayMillisToWaitBetweenMessages = millisToWaitBetweenMessages;
+        this.warmupIterations = warmupIterations;
     }
 
     public static ProgramArguments initialize(String[] commandLineArguments)
@@ -48,8 +50,9 @@ public class ProgramArguments
         int consumerThreads = Integer.parseInt(commandLine.getOptionValue("c"));
         int messagesToSendPerThread = Integer.parseInt(commandLine.getOptionValue("m"));
         double delay = Double.parseDouble(commandLine.getOptionValue("d"));
+        int warmupIterations = Integer.parseInt(commandLine.getOptionValue("w", "3"));
 
-        return new ProgramArguments(producerThreads, consumerThreads, messagesToSendPerThread, delay);
+        return new ProgramArguments(producerThreads, consumerThreads, messagesToSendPerThread, delay, warmupIterations);
     }
 
 
@@ -79,11 +82,18 @@ public class ProgramArguments
                 .desc("Delay in millis to wait between sending messages\n-d 0.001 means delay each message 1 microsecond")
                 .build();
 
+        Option warmup = Option.builder("w")
+                .required(false)
+                .hasArg(true)
+                .desc("Warmup iterations")
+                .build();
+
         Options options = new Options();
         options.addOption(producerThreads);
         options.addOption(consumerThreads);
         options.addOption(messages);
         options.addOption(delay);
+        options.addOption(warmup);
         return options;
     }
 
@@ -116,5 +126,10 @@ public class ProgramArguments
     public double getDelayMillisToWaitBetweenMessages()
     {
         return delayMillisToWaitBetweenMessages;
+    }
+
+    public int getWarmupIterations()
+    {
+        return warmupIterations;
     }
 }
