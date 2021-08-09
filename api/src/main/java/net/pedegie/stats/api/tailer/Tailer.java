@@ -1,4 +1,4 @@
-package net.pedegie.stats.api.reader;
+package net.pedegie.stats.api.tailer;
 
 @FunctionalInterface
 public interface Tailer<T, E>

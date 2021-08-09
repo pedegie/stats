@@ -4,8 +4,9 @@ import net.openhft.chronicle.core.annotation.ForceInline;
 import net.openhft.chronicle.queue.ChronicleQueue;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.chronicle.wire.WireType;
-import net.pedegie.stats.api.reader.Tailer;
-import net.pedegie.stats.api.reader.Tailers;
+import net.pedegie.stats.api.tailer.Tailer;
+import net.pedegie.stats.api.tailer.Tailers;
+import net.pedegie.stats.api.util.BlockSize;
 
 import java.io.Closeable;
 import java.nio.file.Path;
@@ -27,8 +28,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
                 .single(fileName.toAbsolutePath().toString())
                 .wireType(WireType.FIELDLESS_BINARY)
                 .readOnly(false)
-              //  .blockSize(BlockSize.blockSize(fileName))
-               // .testBlockSize()
+                .blockSize(BlockSize.blockSize(fileName.getParent()))
                 .build();
 
         if (tailer != null)
@@ -217,10 +217,19 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         statsQueue.close();
     }
 
+    protected void write(int count, long nanoTime)
+    {
+        statsQueue.acquireAppender()
+                .writeBytes(b -> b
+                        .writeLong(nanoTime)
+                        .writeInt(count));
+    }
+
     public static class QueueStatsBuilder<T>
     {
         protected Queue<T> queue;
         protected Path fileName;
+
         protected Tailer<Long,Integer> tailer;
 
         public QueueStatsBuilder<T> queue(Queue<T> queue)
@@ -240,18 +249,10 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
             this.tailer = tailer;
             return this;
         }
-
         public MPMCQueueStats<T> build()
         {
             return new MPMCQueueStats<>(queue, fileName, tailer);
         }
-    }
 
-    protected void write(int count, long nanoTime)
-    {
-        statsQueue.acquireAppender()
-                .writeBytes(b -> b
-                        .writeLong(nanoTime)
-                        .writeInt(count));
     }
 }

@@ -30,21 +30,43 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
+
+
+/*Benchmark                                                          (threads)  Mode  Cnt      Score   Error  Units
+MPMCQueueStatsPerformanceTest.TestBenchmark.ArrayBlockingQueue            16  avgt        4345.183          ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ArrayBlockingQueue            32  avgt        4468.968          ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ArrayBlockingQueue            64  avgt        4934.040          ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ArrayBlockingQueue           128  avgt        5055.858          ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         16  avgt        4246.027          ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         32  avgt        4389.823          ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         64  avgt        5439.647          ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue        128  avgt        9069.135          ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         16  avgt        4705.416          ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         32  avgt       10031.043          ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         64  avgt       10026.469          ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads        128  avgt       10195.592          ms/op*/
+
 
 public class MPMCQueueStatsPerformanceTest
 {
     @Fork(value = 1)
-    @Warmup(iterations = 0, time = 1)
-    @Measurement(iterations = 1, time = 1)
+    @Warmup(iterations = 2, time = 5)
+    @Measurement(iterations = 5, time = 5)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     @BenchmarkMode({Mode.AverageTime})
     @State(Scope.Benchmark)
-    @Timeout(time = 1)
+    @Timeout(time = 10)
     public static class TestBenchmark
     {
 
+        static
+        {
+            long pid = ProcessHandle.current().pid();
+            System.out.println("PID: "+ pid);
+        }
         @Benchmark
         public void MPMCQueueStatsThreads(QueueConfiguration queueConfiguration)
         {
@@ -69,7 +91,7 @@ public class MPMCQueueStatsPerformanceTest
         {
             private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
 
-            @Param({"1", "2", "4", "8", "16", "32", "64", "128"})
+            @Param({/*"1", "2", "4",*/"8", "16", "32",  "64", "128"})
             public int threads;
 
             Supplier<Void> mpmcQueueStatsBenchmark;
@@ -84,9 +106,13 @@ public class MPMCQueueStatsPerformanceTest
                 ArrayBlockingQueue<Integer> arrayBlockingQueue;
 
                 var dir = new File(testQueuePath.toString());
-                for (File file : dir.listFiles())
-                    if (!file.isDirectory())
-                        file.delete();
+                File[] files = dir.listFiles();
+                if (files != null)
+                {
+                    for (File file : files)
+                        if (!file.isDirectory())
+                            file.delete();
+                }
 
                 mpmcQueueStats = MPMCQueueStats.<Integer>builder()
                         .queue(new ConcurrentLinkedQueue<>())
@@ -106,23 +132,13 @@ public class MPMCQueueStatsPerformanceTest
 
         private static Supplier<Void> runBenchmarkForQueue(Queue<Integer> queue, int threads)
         {
-
-
             Runnable producer = () ->
             {
                 for (int i = 1; i <= 4000; i++)
                 {
-                    try
-                    {
-                        Thread.sleep(1);
-                    } catch (InterruptedException e)
-                    {
-                       System.out.println("Interrupted ");
-                    }
-                    //LockSupport.parkNanos(1000000); // 1 milli
+                    LockSupport.parkNanos(1000000); // 1 milli
                     if (i % 40 == 0)
                     {
-                        System.out.println("ADDING " + i + " " + Thread.currentThread().getName());
                         queue.add(i);
                     } else
                     {
@@ -135,20 +151,13 @@ public class MPMCQueueStatsPerformanceTest
             Runnable consumer = () ->
             {
                 List<Integer> blackHole = new ArrayList<>(1024 << 5);
-                int count = 0;
                 while (true)
                 {
                     Integer element = queue.poll();
                     if (element != null)
                     {
-                        count++;
-                        if(count % 40 == 0)
-                        {
-                            System.out.println("CONSUMING " + count + " " + Thread.currentThread().getName());
-                        }
                         if (element == -1)
                         {
-                            System.out.println("FINISHING");
                             break;
                         }
                         blackHole.add(element);
@@ -164,12 +173,13 @@ public class MPMCQueueStatsPerformanceTest
                 List<CompletableFuture<?>> futures = new ArrayList<>(threads * 2);
                 IntStream.range(0, threads).forEach(index ->
                 {
-                    futures.add(CompletableFuture.supplyAsync(() -> {
+                    futures.add(CompletableFuture.supplyAsync(() ->
+                    {
                         producer.run();
                         return null;
                     }, producerThreadPool));
-
-                    futures.add(CompletableFuture.supplyAsync(() -> {
+                    futures.add(CompletableFuture.supplyAsync(() ->
+                    {
                         consumer.run();
                         return null;
                     }, consumerThreadPool));
