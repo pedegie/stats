@@ -13,6 +13,7 @@ import java.nio.file.Paths;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -67,37 +68,30 @@ public class StatsBenchmark
         var producerPool = Executors.newFixedThreadPool(programArguments.getProducerThreads());
         var consumerPool = Executors.newFixedThreadPool(programArguments.getConsumerThreads());
 
+        int consumerAndProducerThreads = programArguments.getProducerThreads() + programArguments.getConsumerThreads();
+
+        CompletableFuture<?>[] futures = new CompletableFuture[consumerAndProducerThreads];
+
         for (int i = 0; i < programArguments.getWarmupIterations(); i++)
         {
             log.info("Started {} warmup iteration", i + 1);
 
-            CompletableFuture<?> futures[] = new CompletableFuture[programArguments.getProducerThreads() + programArguments.getConsumerThreads()];
+            IntStream.range(0, programArguments.getProducerThreads())
+                    .forEach(index -> futures[index] = runOn(putIntegers, producerPool));
 
-            IntStream.range(0, programArguments.getProducerThreads()).forEach(index ->
-            {
-                futures[index] = CompletableFuture.supplyAsync(() ->
-                {
-                    putIntegers.run();
-                    return null;
-                }, producerPool);
-            });
-
-            IntStream.range(programArguments.getProducerThreads(), programArguments.getProducerThreads() + programArguments.getConsumerThreads()).forEach(index ->
-            {
-                futures[index] = CompletableFuture.supplyAsync(() ->
-                {
-                    consumeIntegers.run();
-                    return null;
-                }, consumerPool);
-            });
+            IntStream.range(programArguments.getProducerThreads(), consumerAndProducerThreads)
+                    .forEach(index -> futures[index] = runOn(consumeIntegers, consumerPool));
 
             CompletableFuture.allOf(futures).get(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
 
         }
         log.info("Started real benchmark");
 
-        IntStream.range(0, programArguments.getProducerThreads()).forEach(index -> producerPool.submit(putIntegers));
-        IntStream.range(0, programArguments.getConsumerThreads()).forEach(index -> consumerPool.submit(consumeIntegers));
+        IntStream.range(0, programArguments.getProducerThreads())
+                .forEach(index -> futures[index] = runOn(putIntegers, producerPool));
+
+        IntStream.range(programArguments.getProducerThreads(), consumerAndProducerThreads)
+                .forEach(index -> futures[index] = runOn(consumeIntegers, consumerPool));
 
         producerPool.shutdown();
         consumerPool.shutdown();
@@ -113,6 +107,15 @@ public class StatsBenchmark
         }
 
         log.info("Benchmark finished");
+    }
+
+    private static CompletableFuture<Object> runOn(Runnable runnable, ExecutorService pool)
+    {
+        return CompletableFuture.supplyAsync(() ->
+        {
+            runnable.run();
+            return null;
+        }, pool);
     }
 
     private static MPMCQueueStats<Integer> createStatsQueue()
@@ -131,7 +134,8 @@ public class StatsBenchmark
         {
             for (File file : files)
                 if (!file.isDirectory())
-                    file.delete();
+                    if (!file.delete())
+                        throw new IllegalStateException("Cannot delete " + file.getAbsolutePath());
         }
     }
 
