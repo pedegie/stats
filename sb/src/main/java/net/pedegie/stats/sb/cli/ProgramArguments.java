@@ -100,12 +100,11 @@ public class ProgramArguments
     private static void printHelp(final Options options)
     {
         HelpFormatter formatter = new HelpFormatter();
-        String syntax = "Main";
-        String usageHeader = "Example of Using Apache Commons CLI";
+        String syntax = "StatsBenchmark";
         System.out.println("\n====");
         System.out.println("HELP");
         System.out.println("====");
-        formatter.printHelp(syntax, usageHeader, options, "");
+        formatter.printHelp(syntax, options);
     }
 
     public int getProducerThreads()

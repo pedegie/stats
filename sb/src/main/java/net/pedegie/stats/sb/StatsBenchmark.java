@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.LockSupport;
@@ -26,7 +27,7 @@ public class StatsBenchmark
     private static final Logger log = LogManager.getLogger(StatsBenchmark.class);
 
     private static final Path statsQueue = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
-    private static final Timeout BENCHMARK_TIMEOUT = new Timeout(TimeUnit.SECONDS, 30);
+    private static final Timeout BENCHMARK_TIMEOUT = new Timeout(TimeUnit.SECONDS, 60);
 
     public static void main(String[] args) throws InterruptedException, ExecutionException, TimeoutException
     {
@@ -65,8 +66,8 @@ public class StatsBenchmark
             }
         };
 
-        var producerPool = Executors.newFixedThreadPool(programArguments.getProducerThreads());
-        var consumerPool = Executors.newFixedThreadPool(programArguments.getConsumerThreads());
+        var producerPool = Executors.newFixedThreadPool(programArguments.getProducerThreads(), new NamedThreadFactory("producer_pool"));
+        var consumerPool = Executors.newFixedThreadPool(programArguments.getConsumerThreads(), new NamedThreadFactory("consumer_pool"));
 
         int consumerAndProducerThreads = programArguments.getProducerThreads() + programArguments.getConsumerThreads();
 
@@ -142,5 +143,19 @@ public class StatsBenchmark
     private static long toNanos(double delayMillisToWaitBetweenMessages)
     {
         return (long) (delayMillisToWaitBetweenMessages * 1000000.0);
+    }
+
+    static class NamedThreadFactory implements ThreadFactory
+    {
+        private final String name;
+
+        public NamedThreadFactory(String name)
+        {
+            this.name = name;
+        }
+
+        public Thread newThread(Runnable r) {
+            return new Thread(r, name);
+        }
     }
 }
