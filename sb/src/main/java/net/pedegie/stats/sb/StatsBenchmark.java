@@ -1,6 +1,5 @@
 package net.pedegie.stats.sb;
 
-import net.openhft.chronicle.threads.BusyPauser;
 import net.pedegie.stats.api.queue.MPMCQueueStats;
 import net.pedegie.stats.sb.cli.ProgramArguments;
 import net.pedegie.stats.sb.timeout.Timeout;
@@ -58,9 +57,6 @@ public class StatsBenchmark
                     {
                         break;
                     }
-                } else
-                {
-                    BusyPauser.INSTANCE.pause();
                 }
 
             }
@@ -84,6 +80,7 @@ public class StatsBenchmark
                     .forEach(index -> futures[index] = runOn(consumeIntegers, consumerPool));
 
             CompletableFuture.allOf(futures).get(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
+            System.out.println("Dropped: " + queueStats.dropped());
 
         }
         log.info("Started real benchmark");
@@ -108,6 +105,7 @@ public class StatsBenchmark
         }
 
         log.info("Benchmark finished");
+        log.info("Dropped {} messages", queueStats.dropped());
     }
 
     private static CompletableFuture<Object> runOn(Runnable runnable, ExecutorService pool)
@@ -154,7 +152,8 @@ public class StatsBenchmark
             this.name = name;
         }
 
-        public Thread newThread(Runnable r) {
+        public Thread newThread(Runnable r)
+        {
             return new Thread(r, name);
         }
     }

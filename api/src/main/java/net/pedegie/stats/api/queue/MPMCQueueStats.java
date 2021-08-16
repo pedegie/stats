@@ -4,9 +4,11 @@ import net.openhft.chronicle.core.annotation.ForceInline;
 import net.openhft.chronicle.queue.ChronicleQueue;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.chronicle.wire.WireType;
+import net.pedegie.stats.api.overflow.DropOnOverflow;
 import net.pedegie.stats.api.tailer.Tailer;
 import net.pedegie.stats.api.tailer.Tailers;
 import net.pedegie.stats.api.util.BlockSize;
+import org.jctools.queues.MpscArrayQueue;
 
 import java.io.Closeable;
 import java.nio.file.Path;
@@ -20,8 +22,10 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     protected final Queue<T> queue;
     protected final ChronicleQueue statsQueue;
     protected final AtomicInteger count = new AtomicInteger(0);
+    protected final MpscArrayQueue<Tuple<Integer, Long>> probeQueue = new MpscArrayQueue<>(131_072); // 2^17
+    protected final ProbeQueueConsumer probeQueueConsumer;
 
-    protected MPMCQueueStats(Queue<T> queue, Path fileName, Tailer<Long, Integer> tailer)
+    public MPMCQueueStats(Queue<T> queue, Path fileName, Tailer<Long, Integer> tailer)
     {
         this.queue = queue;
         this.statsQueue = SingleChronicleQueueBuilder
@@ -35,6 +39,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         {
             Tailers.addTailer(statsQueue.createTailer(), tailer);
         }
+        probeQueueConsumer = new ProbeQueueConsumer(probeQueue, statsQueue.acquireAppender());
     }
 
     @Override
@@ -214,15 +219,29 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     @Override
     public void close()
     {
+        probeQueueConsumer.close();
         statsQueue.close();
     }
 
-    protected void write(int count, long nanoTime)
+    public void stop()
     {
-        statsQueue.acquireAppender()
-                .writeBytes(b -> b
-                        .writeLong(nanoTime)
-                        .writeInt(count));
+        probeQueueConsumer.stop();
+    }
+
+    protected boolean write(int count, long nanoTime)
+    {
+        Tuple<Integer, Long> probe = new Tuple<>(count, nanoTime);
+        if (!probeQueue.offer(probe))
+        {
+            DropOnOverflow.strategy().onOverflow(probe);
+            return false;
+        }
+        return true;
+    }
+
+    public void start()
+    {
+        probeQueueConsumer.start();
     }
 
     public static class QueueStatsBuilder<T>
@@ -230,7 +249,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         protected Queue<T> queue;
         protected Path fileName;
 
-        protected Tailer<Long,Integer> tailer;
+        protected Tailer<Long, Integer> tailer;
 
         public QueueStatsBuilder<T> queue(Queue<T> queue)
         {
@@ -244,11 +263,12 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
             return this;
         }
 
-        public QueueStatsBuilder<T> tailer(Tailer<Long,Integer> tailer)
+        public QueueStatsBuilder<T> tailer(Tailer<Long, Integer> tailer)
         {
             this.tailer = tailer;
             return this;
         }
+
         public MPMCQueueStats<T> build()
         {
             return new MPMCQueueStats<>(queue, fileName, tailer);

@@ -1,5 +1,6 @@
 package net.pedegie.stats.jmh;
 
+import net.pedegie.stats.api.overflow.DroppedDecorator;
 import net.pedegie.stats.api.queue.MPMCQueueStats;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -25,7 +26,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
@@ -34,6 +34,9 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
+/*# Warmup Iteration   2: 10003.707 ms/op   concurrent miala polowe tego przy 32 watkach
+        # Warmup Iteration   3: 10004.216 ms/op
+        Iteration   1: 10003.669 ms/op*/
 
 /*Benchmark                                                          (threads)  Mode  Cnt      Score   Error  Units
 MPMCQueueStatsPerformanceTest.TestBenchmark.ArrayBlockingQueue            16  avgt        4345.183          ms/op
@@ -53,20 +56,15 @@ MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads        128  av
 public class MPMCQueueStatsPerformanceTest
 {
     @Fork(value = 1)
-    @Warmup(iterations = 2, time = 5)
-    @Measurement(iterations = 5, time = 5)
+    @Warmup(iterations = 1)
+    @Measurement(iterations = 1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     @BenchmarkMode({Mode.AverageTime})
     @State(Scope.Benchmark)
-    @Timeout(time = 10)
+    @Timeout(time = 120)
     public static class TestBenchmark
     {
 
-        static
-        {
-            long pid = ProcessHandle.current().pid();
-            System.out.println("PID: "+ pid);
-        }
         @Benchmark
         public void MPMCQueueStatsThreads(QueueConfiguration queueConfiguration)
         {
@@ -79,31 +77,23 @@ public class MPMCQueueStatsPerformanceTest
             queueConfiguration.concurrentLinkedQueueBenchmark.get();
         }
 
-        @Benchmark
-        public void ArrayBlockingQueue(QueueConfiguration queueConfiguration)
-        {
-            queueConfiguration.arrayBlockingQueueBenchmark.get();
-        }
-
-
         @State(Scope.Benchmark)
         public static class QueueConfiguration
         {
             private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
 
-            @Param({/*"1", "2", "4",*/"8", "16", "32",  "64", "128"})
+            @Param({"1", "2", "4","8", "16",  "32", "64", "128"})
             public int threads;
 
             Supplier<Void> mpmcQueueStatsBenchmark;
             Supplier<Void> concurrentLinkedQueueBenchmark;
-            Supplier<Void> arrayBlockingQueueBenchmark;
 
             @Setup(Level.Trial)
             public void setUp()
             {
+                System.out.println("TRIAL");
                 MPMCQueueStats<Integer> mpmcQueueStats;
                 ConcurrentLinkedQueue<Integer> concurrentLinkedQueue;
-                ArrayBlockingQueue<Integer> arrayBlockingQueue;
 
                 var dir = new File(testQueuePath.toString());
                 File[] files = dir.listFiles();
@@ -114,43 +104,31 @@ public class MPMCQueueStatsPerformanceTest
                             file.delete();
                 }
 
-                mpmcQueueStats = MPMCQueueStats.<Integer>builder()
-                        .queue(new ConcurrentLinkedQueue<>())
-                        .fileName(testQueuePath)
-                        .build();
-
+                mpmcQueueStats = new MPMCQueueStats<>(new ConcurrentLinkedQueue<>(),
+                        testQueuePath,
+                        null);
                 concurrentLinkedQueue = new ConcurrentLinkedQueue<>();
-                arrayBlockingQueue = new ArrayBlockingQueue<>(1024 << 4);
 
-
-                mpmcQueueStatsBenchmark = runBenchmarkForQueue(mpmcQueueStats, threads);
-                concurrentLinkedQueueBenchmark = runBenchmarkForQueue(concurrentLinkedQueue, threads);
-                arrayBlockingQueueBenchmark = runBenchmarkForQueue(arrayBlockingQueue, threads);
-
+                mpmcQueueStatsBenchmark = runBenchmarkForQueue(mpmcQueueStats, threads, mpmcQueueStats);
+                concurrentLinkedQueueBenchmark = runBenchmarkForQueue(concurrentLinkedQueue, threads, mpmcQueueStats);
             }
         }
 
-        private static Supplier<Void> runBenchmarkForQueue(Queue<Integer> queue, int threads)
+        private static Supplier<Void> runBenchmarkForQueue(Queue<Integer> queue, int threads, MPMCQueueStats<Integer> mpmcQueueStats)
         {
+            int messagesToSendPerThread = 500;
             Runnable producer = () ->
             {
-                for (int i = 1; i <= 4000; i++)
+                for (int i = 1; i <= messagesToSendPerThread; i++)
                 {
-                    LockSupport.parkNanos(1000000); // 1 milli
-                    if (i % 40 == 0)
-                    {
-                        queue.add(i);
-                    } else
-                    {
-                        queue.offer(i);
-                    }
+                    queue.add(i);
+                    LockSupport.parkNanos(1_000);
                 }
 
                 IntStream.range(0, threads).forEach(i -> queue.add(-1));
             };
             Runnable consumer = () ->
             {
-                List<Integer> blackHole = new ArrayList<>(1024 << 5);
                 while (true)
                 {
                     Integer element = queue.poll();
@@ -160,13 +138,13 @@ public class MPMCQueueStatsPerformanceTest
                         {
                             break;
                         }
-                        blackHole.add(element);
                     }
                 }
             };
 
             return () ->
             {
+                mpmcQueueStats.start();
                 var producerThreadPool = Executors.newFixedThreadPool(threads);
                 var consumerThreadPool = Executors.newFixedThreadPool(threads);
 
@@ -189,8 +167,21 @@ public class MPMCQueueStatsPerformanceTest
                 consumerThreadPool.shutdown();
                 try
                 {
-                    producerThreadPool.awaitTermination(5, TimeUnit.SECONDS);
-                    consumerThreadPool.awaitTermination(5, TimeUnit.SECONDS);
+                    producerThreadPool.awaitTermination(25, TimeUnit.SECONDS);
+                    consumerThreadPool.awaitTermination(25, TimeUnit.SECONDS);
+                    mpmcQueueStats.stop();
+
+                    if (queue instanceof DroppedDecorator)
+                    {
+                        ((DroppedDecorator) queue).stop();
+                        var droppedRatio = ((DroppedDecorator) queue).dropped();
+                        var dropped = droppedRatio.getDropped();
+                        var written = droppedRatio.getWritten();
+                        var ratio = (double) dropped / (written + dropped) * 100;
+
+                        System.out.println("Dropped " + dropped + " / " + (written + dropped) + " messages [" + (int) ratio + "%]");
+                    }
+
                 } catch (InterruptedException e)
                 {
                     e.printStackTrace();
@@ -204,7 +195,9 @@ public class MPMCQueueStatsPerformanceTest
 
             Options options = new OptionsBuilder()
                     .include(TestBenchmark.class.getSimpleName())
-                    .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly", "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64")
+      /*              .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
+                            "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
+                            "-XX:LogFile=/home/kacper/projects/pedegie/stats/jmh/target/jit_logs.txt")*/
                     .build();
             new Runner(options).run();
         }
