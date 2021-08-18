@@ -25,7 +25,7 @@ class MPMCQueueStatsTest extends Specification
 
     private static deleteTestFile()
     {
-        new File(testQueuePath.toString()).eachFile { file -> file.delete() }
+        new File(testQueuePath.toString()).delete()
     }
 
     def "should correctly add element"()

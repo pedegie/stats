@@ -30,8 +30,8 @@
             </dependency>
             <dependency>
                 <groupId>net.openhft</groupId>
-                <artifactId>chronicle-queue</artifactId>
-                <version>5.21ea81</version>
+                <artifactId>chronicle-core</artifactId>
+                <version>2.21ea89</version>
             </dependency>
             <dependency>
                 <groupId>org.openjdk.jmh</groupId>

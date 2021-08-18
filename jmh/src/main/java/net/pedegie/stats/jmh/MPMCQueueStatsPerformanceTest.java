@@ -1,6 +1,5 @@
 package net.pedegie.stats.jmh;
 
-import net.pedegie.stats.api.overflow.DroppedDecorator;
 import net.pedegie.stats.api.queue.MPMCQueueStats;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -38,26 +37,32 @@ import java.util.stream.IntStream;
         # Warmup Iteration   3: 10004.216 ms/op
         Iteration   1: 10003.669 ms/op*/
 
-/*Benchmark                                                          (threads)  Mode  Cnt      Score   Error  Units
-MPMCQueueStatsPerformanceTest.TestBenchmark.ArrayBlockingQueue            16  avgt        4345.183          ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ArrayBlockingQueue            32  avgt        4468.968          ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ArrayBlockingQueue            64  avgt        4934.040          ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ArrayBlockingQueue           128  avgt        5055.858          ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         16  avgt        4246.027          ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         32  avgt        4389.823          ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         64  avgt        5439.647          ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue        128  avgt        9069.135          ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         16  avgt        4705.416          ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         32  avgt       10031.043          ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         64  avgt       10026.469          ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads        128  avgt       10195.592          ms/op*/
+/*Benchmark                                                          (threads)  Mode  Cnt     Score      Error  Units
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue          1  avgt    3  2713.791 ±   86.120  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue          2  avgt    3  2730.953 ±  112.431  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue          4  avgt    3  2742.108 ±   91.329  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue          8  avgt    3  2884.171 ± 2333.550  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         16  avgt    3  2937.123 ±  633.752  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         32  avgt    3  3103.091 ± 1886.084  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         64  avgt    3  3201.386 ± 4283.620  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue        128  avgt    3  3811.099 ± 3760.723  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads          1  avgt    3  2724.187 ±   68.131  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads          2  avgt    3  2749.065 ±   24.299  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads          4  avgt    3  2755.208 ±   40.718  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads          8  avgt    3  2891.358 ± 2116.058  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         16  avgt    3  2949.689 ±  657.005  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         32  avgt    3  3061.542 ± 2517.398  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         64  avgt    3  3077.744 ± 1597.093  ms/op
+MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads        128  avgt    3  3791.936 ± 4803.237  ms/op
+
+*/
 
 
 public class MPMCQueueStatsPerformanceTest
 {
     @Fork(value = 1)
-    @Warmup(iterations = 1)
-    @Measurement(iterations = 1)
+    @Warmup(iterations = 2)
+    @Measurement(iterations = 3)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     @BenchmarkMode({Mode.AverageTime})
     @State(Scope.Benchmark)
@@ -82,7 +87,7 @@ public class MPMCQueueStatsPerformanceTest
         {
             private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
 
-            @Param({"1", "2", "4","8", "16",  "32", "64", "128"})
+            @Param({"1", "2", "4", "8", "16", "32", "64", "128"})
             public int threads;
 
             Supplier<Void> mpmcQueueStatsBenchmark;
@@ -91,7 +96,6 @@ public class MPMCQueueStatsPerformanceTest
             @Setup(Level.Trial)
             public void setUp()
             {
-                System.out.println("TRIAL");
                 MPMCQueueStats<Integer> mpmcQueueStats;
                 ConcurrentLinkedQueue<Integer> concurrentLinkedQueue;
 
@@ -109,14 +113,14 @@ public class MPMCQueueStatsPerformanceTest
                         null);
                 concurrentLinkedQueue = new ConcurrentLinkedQueue<>();
 
-                mpmcQueueStatsBenchmark = runBenchmarkForQueue(mpmcQueueStats, threads, mpmcQueueStats);
-                concurrentLinkedQueueBenchmark = runBenchmarkForQueue(concurrentLinkedQueue, threads, mpmcQueueStats);
+                mpmcQueueStatsBenchmark = runBenchmarkForQueue(mpmcQueueStats, threads);
+                concurrentLinkedQueueBenchmark = runBenchmarkForQueue(concurrentLinkedQueue, threads);
             }
         }
 
-        private static Supplier<Void> runBenchmarkForQueue(Queue<Integer> queue, int threads, MPMCQueueStats<Integer> mpmcQueueStats)
+        private static Supplier<Void> runBenchmarkForQueue(Queue<Integer> queue, int threads)
         {
-            int messagesToSendPerThread = 500;
+            int messagesToSendPerThread = 50000;
             Runnable producer = () ->
             {
                 for (int i = 1; i <= messagesToSendPerThread; i++)
@@ -144,7 +148,6 @@ public class MPMCQueueStatsPerformanceTest
 
             return () ->
             {
-                mpmcQueueStats.start();
                 var producerThreadPool = Executors.newFixedThreadPool(threads);
                 var consumerThreadPool = Executors.newFixedThreadPool(threads);
 
@@ -169,18 +172,6 @@ public class MPMCQueueStatsPerformanceTest
                 {
                     producerThreadPool.awaitTermination(25, TimeUnit.SECONDS);
                     consumerThreadPool.awaitTermination(25, TimeUnit.SECONDS);
-                    mpmcQueueStats.stop();
-
-                    if (queue instanceof DroppedDecorator)
-                    {
-                        ((DroppedDecorator) queue).stop();
-                        var droppedRatio = ((DroppedDecorator) queue).dropped();
-                        var dropped = droppedRatio.getDropped();
-                        var written = droppedRatio.getWritten();
-                        var ratio = (double) dropped / (written + dropped) * 100;
-
-                        System.out.println("Dropped " + dropped + " / " + (written + dropped) + " messages [" + (int) ratio + "%]");
-                    }
 
                 } catch (InterruptedException e)
                 {
@@ -195,9 +186,9 @@ public class MPMCQueueStatsPerformanceTest
 
             Options options = new OptionsBuilder()
                     .include(TestBenchmark.class.getSimpleName())
-      /*              .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
-                            "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
-                            "-XX:LogFile=/home/kacper/projects/pedegie/stats/jmh/target/jit_logs.txt")*/
+                    /*              .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
+                                          "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
+                                          "-XX:LogFile=/home/kacper/projects/pedegie/stats/jmh/target/jit_logs.txt")*/
                     .build();
             new Runner(options).run();
         }

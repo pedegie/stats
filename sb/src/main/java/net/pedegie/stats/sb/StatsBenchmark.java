@@ -5,6 +5,7 @@ import net.pedegie.stats.sb.cli.ProgramArguments;
 import net.pedegie.stats.sb.timeout.Timeout;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -80,7 +81,6 @@ public class StatsBenchmark
                     .forEach(index -> futures[index] = runOn(consumeIntegers, consumerPool));
 
             CompletableFuture.allOf(futures).get(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
-            System.out.println("Dropped: " + queueStats.dropped());
 
         }
         log.info("Started real benchmark");
@@ -105,7 +105,6 @@ public class StatsBenchmark
         }
 
         log.info("Benchmark finished");
-        log.info("Dropped {} messages", queueStats.dropped());
     }
 
     private static CompletableFuture<Object> runOn(Runnable runnable, ExecutorService pool)
@@ -152,7 +151,7 @@ public class StatsBenchmark
             this.name = name;
         }
 
-        public Thread newThread(Runnable r)
+        public Thread newThread(@NotNull Runnable r)
         {
             return new Thread(r, name);
         }

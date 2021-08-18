@@ -1,16 +1,14 @@
 package net.pedegie.stats.api.queue;
 
 import net.openhft.chronicle.core.annotation.ForceInline;
-import net.openhft.chronicle.queue.ChronicleQueue;
-import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
-import net.openhft.chronicle.wire.WireType;
-import net.pedegie.stats.api.overflow.DropOnOverflow;
 import net.pedegie.stats.api.tailer.Tailer;
-import net.pedegie.stats.api.tailer.Tailers;
-import net.pedegie.stats.api.util.BlockSize;
-import org.jctools.queues.MpscArrayQueue;
 
 import java.io.Closeable;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Iterator;
@@ -20,26 +18,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MPMCQueueStats<T> implements Queue<T>, Closeable
 {
     protected final Queue<T> queue;
-    protected final ChronicleQueue statsQueue;
     protected final AtomicInteger count = new AtomicInteger(0);
-    protected final MpscArrayQueue<Tuple<Integer, Long>> probeQueue = new MpscArrayQueue<>(131_072); // 2^17
-    protected final ProbeQueueConsumer probeQueueConsumer;
+    protected final RandomAccessFile logFileAccess;
+    protected final MappedByteBuffer statsLogFile;
+    protected final AtomicInteger fileOffset = new AtomicInteger(0);
 
     public MPMCQueueStats(Queue<T> queue, Path fileName, Tailer<Long, Integer> tailer)
     {
         this.queue = queue;
-        this.statsQueue = SingleChronicleQueueBuilder
-                .single(fileName.toAbsolutePath().toString())
-                .wireType(WireType.FIELDLESS_BINARY)
-                .readOnly(false)
-                .blockSize(BlockSize.blockSize(fileName.getParent()))
-                .build();
-
-        if (tailer != null)
+        try
         {
-            Tailers.addTailer(statsQueue.createTailer(), tailer);
+            Files.deleteIfExists(fileName);
+            Files.createFile(fileName);
+            this.logFileAccess = new RandomAccessFile(fileName.toFile(), "rw");
+            this.statsLogFile = logFileAccess.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, Integer.MAX_VALUE);
+        } catch (IOException e)
+        {
+            throw new RuntimeException(e);
         }
-        probeQueueConsumer = new ProbeQueueConsumer(probeQueue, statsQueue.acquireAppender());
     }
 
     @Override
@@ -219,29 +215,25 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     @Override
     public void close()
     {
-        probeQueueConsumer.close();
-        statsQueue.close();
-    }
-
-    public void stop()
-    {
-        probeQueueConsumer.stop();
-    }
-
-    protected boolean write(int count, long nanoTime)
-    {
-        Tuple<Integer, Long> probe = new Tuple<>(count, nanoTime);
-        if (!probeQueue.offer(probe))
+        try
         {
-            DropOnOverflow.strategy().onOverflow(probe);
-            return false;
+            logFileAccess.close();
+        } catch (IOException e)
+        {
+            throw new RuntimeException(e);
         }
-        return true;
     }
 
-    public void start()
+    protected void write(int count, long nanoTime)
     {
-        probeQueueConsumer.start();
+        int offset = nextOffset();
+        statsLogFile.putInt(offset, count);
+        statsLogFile.putLong(offset + 4, nanoTime);
+    }
+
+    private int nextOffset()
+    {
+        return fileOffset.getAndAdd(12); // int + long
     }
 
     public static class QueueStatsBuilder<T>
