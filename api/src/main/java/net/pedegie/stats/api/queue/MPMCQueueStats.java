@@ -23,7 +23,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     protected final MappedByteBuffer statsLogFile;
     protected final AtomicInteger fileOffset = new AtomicInteger(0);
 
-    public MPMCQueueStats(Queue<T> queue, Path fileName, Tailer<Long, Integer> tailer)
+    protected MPMCQueueStats(Queue<T> queue, Path fileName, Tailer<Long, Integer> tailer)
     {
         this.queue = queue;
         try

@@ -108,9 +108,11 @@ public class MPMCQueueStatsPerformanceTest
                             file.delete();
                 }
 
-                mpmcQueueStats = new MPMCQueueStats<>(new ConcurrentLinkedQueue<>(),
-                        testQueuePath,
-                        null);
+                mpmcQueueStats = MPMCQueueStats.<Integer>builder()
+                        .queue(new ConcurrentLinkedQueue<>())
+                        .fileName(testQueuePath)
+                        .build();
+
                 concurrentLinkedQueue = new ConcurrentLinkedQueue<>();
 
                 mpmcQueueStatsBenchmark = runBenchmarkForQueue(mpmcQueueStats, threads);
