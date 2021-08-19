@@ -22,20 +22,11 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
-import java.util.stream.IntStream;
 
-/*# Warmup Iteration   2: 10003.707 ms/op   concurrent miala polowe tego przy 32 watkach
-        # Warmup Iteration   3: 10004.216 ms/op
-        Iteration   1: 10003.669 ms/op*/
+import static net.pedegie.stats.jmh.Benchmark.runBenchmarkForQueue;
 
 /*Benchmark                                                          (threads)  Mode  Cnt     Score      Error  Units
 MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue          1  avgt    3  2713.791 ±   86.120  ms/op
@@ -54,11 +45,10 @@ MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         16  av
 MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         32  avgt    3  3061.542 ± 2517.398  ms/op
 MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         64  avgt    3  3077.744 ± 1597.093  ms/op
 MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads        128  avgt    3  3791.936 ± 4803.237  ms/op
-
 */
 
 
-public class MPMCQueueStatsPerformanceTest
+public class QueueStatsVsConcurrentLinkedQueue
 {
     @Fork(value = 1)
     @Warmup(iterations = 2)
@@ -69,11 +59,10 @@ public class MPMCQueueStatsPerformanceTest
     @Timeout(time = 120)
     public static class TestBenchmark
     {
-
         @Benchmark
-        public void MPMCQueueStatsThreads(QueueConfiguration queueConfiguration)
+        public void MPMCQueueStatsConcurrentLinkedQueue(QueueConfiguration queueConfiguration)
         {
-            queueConfiguration.mpmcQueueStatsBenchmark.get();
+            queueConfiguration.mpmcQueueStatsConcurrentLinkedQueueBenchmark.get();
         }
 
         @Benchmark
@@ -90,14 +79,13 @@ public class MPMCQueueStatsPerformanceTest
             @Param({"1", "2", "4", "8", "16", "32", "64", "128"})
             public int threads;
 
-            Supplier<Void> mpmcQueueStatsBenchmark;
+            Supplier<Void> mpmcQueueStatsConcurrentLinkedQueueBenchmark;
             Supplier<Void> concurrentLinkedQueueBenchmark;
 
             @Setup(Level.Trial)
             public void setUp()
             {
-                MPMCQueueStats<Integer> mpmcQueueStats;
-                ConcurrentLinkedQueue<Integer> concurrentLinkedQueue;
+
 
                 var dir = new File(testQueuePath.toString());
                 File[] files = dir.listFiles();
@@ -108,91 +96,28 @@ public class MPMCQueueStatsPerformanceTest
                             file.delete();
                 }
 
-                mpmcQueueStats = MPMCQueueStats.<Integer>builder()
+                MPMCQueueStats<Integer> mpmcQueueStatsConcurrentLinkedQueue = MPMCQueueStats.<Integer>builder()
                         .queue(new ConcurrentLinkedQueue<>())
                         .fileName(testQueuePath)
                         .build();
-
-                concurrentLinkedQueue = new ConcurrentLinkedQueue<>();
-
-                mpmcQueueStatsBenchmark = runBenchmarkForQueue(mpmcQueueStats, threads);
-                concurrentLinkedQueueBenchmark = runBenchmarkForQueue(concurrentLinkedQueue, threads);
+                mpmcQueueStatsConcurrentLinkedQueueBenchmark = runBenchmarkForQueue(mpmcQueueStatsConcurrentLinkedQueue, threads);
+                concurrentLinkedQueueBenchmark = runBenchmarkForQueue(new ConcurrentLinkedQueue<>(), threads);
             }
         }
 
-        private static Supplier<Void> runBenchmarkForQueue(Queue<Integer> queue, int threads)
-        {
-            int messagesToSendPerThread = 50000;
-            Runnable producer = () ->
-            {
-                for (int i = 1; i <= messagesToSendPerThread; i++)
-                {
-                    queue.add(i);
-                    LockSupport.parkNanos(1_000);
-                }
 
-                IntStream.range(0, threads).forEach(i -> queue.add(-1));
-            };
-            Runnable consumer = () ->
-            {
-                while (true)
-                {
-                    Integer element = queue.poll();
-                    if (element != null)
-                    {
-                        if (element == -1)
-                        {
-                            break;
-                        }
-                    }
-                }
-            };
-
-            return () ->
-            {
-                var producerThreadPool = Executors.newFixedThreadPool(threads);
-                var consumerThreadPool = Executors.newFixedThreadPool(threads);
-
-                List<CompletableFuture<?>> futures = new ArrayList<>(threads * 2);
-                IntStream.range(0, threads).forEach(index ->
-                {
-                    futures.add(CompletableFuture.supplyAsync(() ->
-                    {
-                        producer.run();
-                        return null;
-                    }, producerThreadPool));
-                    futures.add(CompletableFuture.supplyAsync(() ->
-                    {
-                        consumer.run();
-                        return null;
-                    }, consumerThreadPool));
-                });
-
-                producerThreadPool.shutdown();
-                consumerThreadPool.shutdown();
-                try
-                {
-                    producerThreadPool.awaitTermination(25, TimeUnit.SECONDS);
-                    consumerThreadPool.awaitTermination(25, TimeUnit.SECONDS);
-
-                } catch (InterruptedException e)
-                {
-                    e.printStackTrace();
-                }
-                return null;
-            };
-        }
-
-        public static void main(String[] args) throws RunnerException
+/*        public static void main(String[] args) throws RunnerException
         {
 
             Options options = new OptionsBuilder()
                     .include(TestBenchmark.class.getSimpleName())
-                    /*              .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
+                    *//*              .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
                                           "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
-                                          "-XX:LogFile=/home/kacper/projects/pedegie/stats/jmh/target/jit_logs.txt")*/
+                                          "-XX:LogFile=/home/kacper/projects/pedegie/stats/jmh/target/jit_logs.txt")*//*
                     .build();
             new Runner(options).run();
-        }
+        }*/
     }
+
+
 }
