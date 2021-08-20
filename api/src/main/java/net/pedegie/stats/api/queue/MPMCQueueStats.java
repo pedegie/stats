@@ -1,10 +1,12 @@
 package net.pedegie.stats.api.queue;
 
+import lombok.AccessLevel;
+import lombok.SneakyThrows;
+import lombok.experimental.FieldDefaults;
 import net.openhft.chronicle.core.annotation.ForceInline;
 import net.pedegie.stats.api.tailer.Tailer;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -15,27 +17,23 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
 public class MPMCQueueStats<T> implements Queue<T>, Closeable
 {
-    protected final Queue<T> queue;
-    protected final AtomicInteger count = new AtomicInteger(0);
-    protected final RandomAccessFile logFileAccess;
-    protected final MappedByteBuffer statsLogFile;
-    protected final AtomicInteger fileOffset = new AtomicInteger(0);
+    Queue<T> queue;
+    AtomicInteger count = new AtomicInteger(0);
+    RandomAccessFile logFileAccess;
+    MappedByteBuffer statsLogFile;
+    AtomicInteger fileOffset = new AtomicInteger(0);
 
+    @SneakyThrows
     protected MPMCQueueStats(Queue<T> queue, Path fileName, Tailer<Long, Integer> tailer)
     {
+        Files.deleteIfExists(fileName);
+        Files.createFile(fileName);
         this.queue = queue;
-        try
-        {
-            Files.deleteIfExists(fileName);
-            Files.createFile(fileName);
-            this.logFileAccess = new RandomAccessFile(fileName.toFile(), "rw");
-            this.statsLogFile = logFileAccess.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, Integer.MAX_VALUE);
-        } catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
+        this.logFileAccess = new RandomAccessFile(fileName.toFile(), "rw");
+        this.statsLogFile = logFileAccess.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, Integer.MAX_VALUE);
     }
 
     @Override
@@ -213,15 +211,10 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     }
 
     @Override
+    @SneakyThrows
     public void close()
     {
-        try
-        {
-            logFileAccess.close();
-        } catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
+        logFileAccess.close();
     }
 
     protected void write(int count, long nanoTime)

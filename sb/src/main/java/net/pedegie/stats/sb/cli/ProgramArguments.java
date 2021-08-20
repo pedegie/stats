@@ -1,5 +1,8 @@
 package net.pedegie.stats.sb.cli;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.experimental.FieldDefaults;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -10,13 +13,15 @@ import org.apache.commons.cli.ParseException;
 
 import java.util.Arrays;
 
+@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@Getter
 public class ProgramArguments
 {
-    private final int producerThreads;
-    private final int consumerThreads;
-    private final int messagesToSendPerThread;
-    private final double delayMillisToWaitBetweenMessages;
-    private final int warmupIterations;
+    int producerThreads;
+    int consumerThreads;
+    int messagesToSendPerThread;
+    double delayMillisToWaitBetweenMessages;
+    int warmupIterations;
 
     private ProgramArguments(int producerThreads, int consumerThreads, int messagesToSendPerThread, double millisToWaitBetweenMessages, int warmupIterations)
     {
@@ -35,8 +40,7 @@ public class ProgramArguments
         try
         {
             commandLine = cmdLineParser.parse(options, commandLineArguments);
-        }
-        catch (ParseException parseException)
+        } catch (ParseException parseException)
         {
             System.out.println(
                     "ERROR: Unable to parse command-line arguments "
@@ -105,30 +109,5 @@ public class ProgramArguments
         System.out.println("HELP");
         System.out.println("====");
         formatter.printHelp(syntax, options);
-    }
-
-    public int getProducerThreads()
-    {
-        return producerThreads;
-    }
-
-    public int getConsumerThreads()
-    {
-        return consumerThreads;
-    }
-
-    public int getMessagesToSendPerThread()
-    {
-        return messagesToSendPerThread;
-    }
-
-    public double getDelayMillisToWaitBetweenMessages()
-    {
-        return delayMillisToWaitBetweenMessages;
-    }
-
-    public int getWarmupIterations()
-    {
-        return warmupIterations;
     }
 }

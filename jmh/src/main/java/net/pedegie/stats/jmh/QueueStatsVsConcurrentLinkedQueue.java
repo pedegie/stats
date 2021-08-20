@@ -106,17 +106,17 @@ public class QueueStatsVsConcurrentLinkedQueue
         }
 
 
-/*        public static void main(String[] args) throws RunnerException
+        public static void main(String[] args) throws RunnerException
         {
 
             Options options = new OptionsBuilder()
                     .include(TestBenchmark.class.getSimpleName())
-                    *//*              .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
-                                          "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
-                                          "-XX:LogFile=/home/kacper/projects/pedegie/stats/jmh/target/jit_logs.txt")*//*
+              /*      .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
+                            "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
+                            "-XX:LogFile=/home/kacper/projects/pedegie/stats/jmh/target/jit_logs.txt")*/
                     .build();
             new Runner(options).run();
-        }*/
+        }
     }
 
 
