@@ -1,5 +1,6 @@
 package net.pedegie.stats.sb;
 
+import net.pedegie.stats.api.queue.LogFileConfiguration;
 import net.pedegie.stats.api.queue.MPMCQueueStats;
 import net.pedegie.stats.sb.cli.ProgramArguments;
 import net.pedegie.stats.sb.timeout.Timeout;
@@ -118,9 +119,14 @@ public class StatsBenchmark
 
     private static MPMCQueueStats<Integer> createStatsQueue()
     {
+        var logFileConfiguration = LogFileConfiguration.builder()
+                .path(statsQueue)
+                .override(true)
+                .build();
+
         return MPMCQueueStats.<Integer>builder()
                 .queue(new ConcurrentLinkedQueue<>())
-                .fileName(statsQueue)
+                .logFileConfiguration(logFileConfiguration)
                 .build();
     }
 

@@ -11,7 +11,6 @@ import java.io.RandomAccessFile;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
@@ -25,14 +24,17 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     RandomAccessFile logFileAccess;
     MappedByteBuffer statsLogFile;
     AtomicInteger fileOffset = new AtomicInteger(0);
+    LogFileConfiguration logFileConfiguration;
 
     @SneakyThrows
-    protected MPMCQueueStats(Queue<T> queue, Path fileName, Tailer<Long, Integer> tailer)
+    protected MPMCQueueStats(Queue<T> queue, LogFileConfiguration logFileConfiguration, Tailer<Long, Integer> tailer)
     {
-        Files.deleteIfExists(fileName);
-        Files.createFile(fileName);
+        LogFileConfigurationValidator.validate(logFileConfiguration);
+        this.logFileConfiguration = logFileConfiguration;
+        Files.deleteIfExists(logFileConfiguration.getPath());
+        Files.createFile(logFileConfiguration.getPath());
         this.queue = queue;
-        this.logFileAccess = new RandomAccessFile(fileName.toFile(), "rw");
+        this.logFileAccess = new RandomAccessFile(logFileConfiguration.getPath().toFile(), "rw");
         this.statsLogFile = logFileAccess.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, Integer.MAX_VALUE);
     }
 
@@ -229,10 +231,11 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         return fileOffset.getAndAdd(12); // int + long
     }
 
+    @FieldDefaults(level = AccessLevel.PROTECTED)
     public static class QueueStatsBuilder<T>
     {
-        protected Queue<T> queue;
-        protected Path fileName;
+        Queue<T> queue;
+        LogFileConfiguration logFileConfiguration;
 
         protected Tailer<Long, Integer> tailer;
 
@@ -242,9 +245,9 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
             return this;
         }
 
-        public QueueStatsBuilder<T> fileName(Path fileName)
+        public QueueStatsBuilder<T> logFileConfiguration(LogFileConfiguration logFileConfiguration)
         {
-            this.fileName = fileName;
+            this.logFileConfiguration = logFileConfiguration;
             return this;
         }
 
@@ -256,7 +259,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
 
         public MPMCQueueStats<T> build()
         {
-            return new MPMCQueueStats<>(queue, fileName, tailer);
+            return new MPMCQueueStats<>(queue, logFileConfiguration, tailer);
         }
 
     }

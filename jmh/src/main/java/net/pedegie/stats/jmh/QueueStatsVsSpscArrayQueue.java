@@ -1,5 +1,6 @@
 package net.pedegie.stats.jmh;
 
+import net.pedegie.stats.api.queue.LogFileConfiguration;
 import net.pedegie.stats.api.queue.MPMCQueueStats;
 import org.jctools.queues.SpscArrayQueue;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -77,9 +78,14 @@ public class QueueStatsVsSpscArrayQueue
                             file.delete();
                 }
 
+                var logFileConfiguration = LogFileConfiguration.builder()
+                        .path(testQueuePath)
+                        .override(true)
+                        .build();
+
                 MPMCQueueStats<Integer> mpmcQueueStatsSpscArrayQueue = MPMCQueueStats.<Integer>builder()
                         .queue(new SpscArrayQueue<>(50000))
-                        .fileName(testQueuePath)
+                        .logFileConfiguration(logFileConfiguration)
                         .build();
                 mpmcQueueStatsSpscArrayQueueBenchmark = runBenchmarkForQueue(mpmcQueueStatsSpscArrayQueue, 1);
                 spscArrayQueueBenchmark = runBenchmarkForQueue(new SpscArrayQueue<>(50000), 1);

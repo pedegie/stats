@@ -1,5 +1,6 @@
 package net.pedegie.stats.jmh;
 
+import net.pedegie.stats.api.queue.LogFileConfiguration;
 import net.pedegie.stats.api.queue.MPMCQueueStats;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -96,9 +97,14 @@ public class QueueStatsVsConcurrentLinkedQueue
                             file.delete();
                 }
 
+                var logFileConfiguration = LogFileConfiguration.builder()
+                        .path(testQueuePath)
+                        .override(true)
+                        .build();
+
                 MPMCQueueStats<Integer> mpmcQueueStatsConcurrentLinkedQueue = MPMCQueueStats.<Integer>builder()
                         .queue(new ConcurrentLinkedQueue<>())
-                        .fileName(testQueuePath)
+                        .logFileConfiguration(logFileConfiguration)
                         .build();
                 mpmcQueueStatsConcurrentLinkedQueueBenchmark = runBenchmarkForQueue(mpmcQueueStatsConcurrentLinkedQueue, threads);
                 concurrentLinkedQueueBenchmark = runBenchmarkForQueue(new ConcurrentLinkedQueue<>(), threads);
@@ -111,9 +117,9 @@ public class QueueStatsVsConcurrentLinkedQueue
 
             Options options = new OptionsBuilder()
                     .include(TestBenchmark.class.getSimpleName())
-              /*      .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
-                            "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
-                            "-XX:LogFile=/home/kacper/projects/pedegie/stats/jmh/target/jit_logs.txt")*/
+                    /*      .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
+                                  "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
+                                  "-XX:LogFile=/home/kacper/projects/pedegie/stats/jmh/target/jit_logs.txt")*/
                     .build();
             new Runner(options).run();
         }

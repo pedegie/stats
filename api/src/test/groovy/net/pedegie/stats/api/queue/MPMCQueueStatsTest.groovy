@@ -16,11 +16,7 @@ class MPMCQueueStatsTest extends Specification
     def setup()
     {
         deleteTestFile()
-
-        mpmcQueueStats = MPMCQueueStats.<Integer> builder()
-                .queue(new ConcurrentLinkedQueue<>())
-                .fileName(testQueuePath)
-                .build()
+        mpmcQueueStats = createQueue(new ConcurrentLinkedQueue<Integer>())
     }
 
     private static deleteTestFile()
@@ -45,11 +41,7 @@ class MPMCQueueStatsTest extends Specification
     def "should throw an error on add if queue is full"()
     {
         given:
-            deleteTestFile()
-            mpmcQueueStats = MPMCQueueStats.<Integer> builder()
-                    .queue(new ArrayBlockingQueue<Integer>(1))
-                    .fileName(testQueuePath)
-                    .build()
+            mpmcQueueStats = createQueue(new ArrayBlockingQueue<Integer>(1))
         when:
             mpmcQueueStats.add(1)
             mpmcQueueStats.add(2)
@@ -134,11 +126,7 @@ class MPMCQueueStatsTest extends Specification
     def "should correctly offer elements"()
     {
         given:
-            deleteTestFile()
-            mpmcQueueStats = MPMCQueueStats.<Integer> builder()
-                    .queue(new ArrayBlockingQueue<Integer>(1))
-                    .fileName(testQueuePath)
-                    .build()
+            mpmcQueueStats = createQueue(new ArrayBlockingQueue<Integer>(1))
         when:
             boolean firstElementPut = mpmcQueueStats.offer(1)
             boolean secondElementPut = mpmcQueueStats.offer(2)
@@ -198,5 +186,19 @@ class MPMCQueueStatsTest extends Specification
                 }
             }
         }
+    }
+
+    private static MPMCQueueStats<Integer> createQueue(Queue<Integer> queue)
+    {
+        LogFileConfiguration logFileConfiguration = LogFileConfiguration
+                .builder()
+                .path(testQueuePath)
+                .override(true)
+                .build()
+
+        return MPMCQueueStats.<Integer> builder()
+                .queue(queue)
+                .logFileConfiguration(logFileConfiguration)
+                .build()
     }
 }
