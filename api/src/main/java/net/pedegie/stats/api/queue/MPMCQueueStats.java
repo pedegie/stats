@@ -215,6 +215,11 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         fileAccess.writeProbe(count, nanoTime);
     }
 
+    public void resetOffset()
+    {
+        fileAccess.resetOffset();
+    }
+
     @FieldDefaults(level = AccessLevel.PROTECTED)
     public static class QueueStatsBuilder<T>
     {

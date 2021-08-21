@@ -38,6 +38,12 @@ public class FileAccess implements Closeable
         return fileOffset.getAndAdd(INT_AND_LONG_SIZE_SUM);
     }
 
+    //todo merging files feature
+    public void resetOffset()
+    {
+        fileOffset.set(0);
+    }
+
     @Override
     public void close() throws IOException
     {
