@@ -1,4 +1,6 @@
-package net.pedegie.stats.api.queue;
+package net.pedegie.stats.api.queue.fileaccess;
+
+import net.pedegie.stats.api.queue.LogFileConfiguration;
 
 import java.util.Objects;
 
@@ -18,39 +20,38 @@ class LogFileConfigurationValidator
                 throwException("append", "newFileWithDate");
             }
 
-            if(logFileConfiguration.isOverride())
+            if (logFileConfiguration.isOverride())
             {
                 throwException("append", "override");
             }
         }
 
-        if(logFileConfiguration.isNewFileWithDate())
+        if (logFileConfiguration.isNewFileWithDate())
         {
-            if(logFileConfiguration.isAppend())
+            if (logFileConfiguration.isAppend())
             {
                 throwException("newFileWithDate", "append");
             }
 
-            if(logFileConfiguration.isOverride())
+            if (logFileConfiguration.isOverride())
             {
-                throwException("newFileWithDate", "append");
+                throwException("newFileWithDate", "override");
             }
         }
 
-        if(logFileConfiguration.isOverride())
+        if (logFileConfiguration.isOverride())
         {
-            if(logFileConfiguration.isAppend())
+            if (logFileConfiguration.isAppend())
             {
                 throwException("override", "append");
             }
 
-            if(logFileConfiguration.isNewFileWithDate())
+            if (logFileConfiguration.isNewFileWithDate())
             {
                 throwException("override", "newFileWithDate");
             }
         }
     }
-
 
     private static void throwException(String firstProperty, String secondProperty)
     {

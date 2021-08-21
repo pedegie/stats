@@ -2,13 +2,14 @@ package net.pedegie.stats.api.queue
 
 import spock.lang.Specification
 
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentLinkedQueue
 
 class QueueCreationTest extends Specification
 {
-    private static final Path QUEUE_PATH = Paths.get("tmp", "stats_queue.log")
+    private static final Path QUEUE_PATH = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue.log")
 
     def "should throw an exception on misconfiguration log file creation"()
     {
@@ -87,6 +88,26 @@ class QueueCreationTest extends Specification
             createQueue(null)
         then:
             thrown(NullPointerException)
+    }
+
+    def "should create nested directories if path not exists"()
+    {
+        given:
+            Path nestedFilePath = Paths.get(System.getProperty("java.io.tmpdir"), "dir1", "dir2", "stats_queue.log")
+            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+                    .override(true)
+                    .path(nestedFilePath)
+                    .build()
+        when:
+            MPMCQueueStats queue = MPMCQueueStats.<Integer> builder()
+                    .queue(new ConcurrentLinkedQueue<Integer>())
+                    .logFileConfiguration(logFileConfiguration)
+                    .build()
+        then:
+            Files.exists(nestedFilePath)
+        cleanup:
+            queue.close()
+            Files.deleteIfExists(nestedFilePath)
     }
 
     private static void createQueue(LogFileConfiguration logFileConfiguration)

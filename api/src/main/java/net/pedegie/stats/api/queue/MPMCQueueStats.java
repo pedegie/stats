@@ -4,13 +4,12 @@ import lombok.AccessLevel;
 import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import net.openhft.chronicle.core.annotation.ForceInline;
+import net.pedegie.stats.api.queue.fileaccess.FileAccess;
+import net.pedegie.stats.api.queue.fileaccess.FileAccessStrategy;
 import net.pedegie.stats.api.tailer.Tailer;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.Closeable;
-import java.io.RandomAccessFile;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.file.Files;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
@@ -21,21 +20,13 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
 {
     Queue<T> queue;
     AtomicInteger count = new AtomicInteger(0);
-    RandomAccessFile logFileAccess;
-    MappedByteBuffer statsLogFile;
-    AtomicInteger fileOffset = new AtomicInteger(0);
-    LogFileConfiguration logFileConfiguration;
+    FileAccess fileAccess;
 
     @SneakyThrows
     protected MPMCQueueStats(Queue<T> queue, LogFileConfiguration logFileConfiguration, Tailer<Long, Integer> tailer)
     {
-        LogFileConfigurationValidator.validate(logFileConfiguration);
-        this.logFileConfiguration = logFileConfiguration;
-        Files.deleteIfExists(logFileConfiguration.getPath());
-        Files.createFile(logFileConfiguration.getPath());
+        this.fileAccess = FileAccessStrategy.accept(logFileConfiguration);
         this.queue = queue;
-        this.logFileAccess = new RandomAccessFile(logFileConfiguration.getPath().toFile(), "rw");
-        this.statsLogFile = logFileAccess.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, Integer.MAX_VALUE);
     }
 
     @Override
@@ -69,7 +60,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     }
 
     @Override
-    public <T1> T1[] toArray(T1[] a)
+    public <T1> T1[] toArray(T1 @NotNull [] a)
     {
         return queue.toArray(a);
     }
@@ -101,13 +92,13 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     }
 
     @Override
-    public boolean containsAll(Collection<?> c)
+    public boolean containsAll(@NotNull Collection<?> c)
     {
         return queue.containsAll(c);
     }
 
     @Override
-    public boolean addAll(Collection<? extends T> c)
+    public boolean addAll(@NotNull Collection<? extends T> c)
     {
         boolean added = queue.addAll(c);
         if (added)
@@ -120,7 +111,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     }
 
     @Override
-    public boolean removeAll(Collection<?> c)
+    public boolean removeAll(@NotNull Collection<?> c)
     {
         boolean removed = queue.removeAll(c);
         if (removed)
@@ -131,7 +122,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     }
 
     @Override
-    public boolean retainAll(Collection<?> c)
+    public boolean retainAll(@NotNull Collection<?> c)
     {
         boolean retained = queue.retainAll(c);
         if (retained)
@@ -216,19 +207,12 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     @SneakyThrows
     public void close()
     {
-        logFileAccess.close();
+        fileAccess.close();
     }
 
     protected void write(int count, long nanoTime)
     {
-        int offset = nextOffset();
-        statsLogFile.putInt(offset, count);
-        statsLogFile.putLong(offset + 4, nanoTime);
-    }
-
-    private int nextOffset()
-    {
-        return fileOffset.getAndAdd(12); // int + long
+        fileAccess.writeProbe(count, nanoTime);
     }
 
     @FieldDefaults(level = AccessLevel.PROTECTED)
@@ -236,6 +220,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     {
         Queue<T> queue;
         LogFileConfiguration logFileConfiguration;
+        int mmapSize;
 
         protected Tailer<Long, Integer> tailer;
 
