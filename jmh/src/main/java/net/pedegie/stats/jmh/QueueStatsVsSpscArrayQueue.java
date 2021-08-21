@@ -20,7 +20,6 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
@@ -69,15 +68,6 @@ public class QueueStatsVsSpscArrayQueue
             @Setup(Level.Trial)
             public void setUp()
             {
-                var dir = new File(testQueuePath.toString());
-                File[] files = dir.listFiles();
-                if (files != null)
-                {
-                    for (File file : files)
-                        if (!file.isDirectory())
-                            file.delete();
-                }
-
                 var logFileConfiguration = LogFileConfiguration.builder()
                         .path(testQueuePath)
                         .override(true)
@@ -100,7 +90,7 @@ public class QueueStatsVsSpscArrayQueue
                     .include(TestBenchmark2.class.getSimpleName())
                     /*              .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
                                           "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
-                                          "-XX:LogFile=/home/kacper/projects/pedegie/stats/jmh/target/jit_logs.txt")*/
+                                          "-XX:LogFile=jit_logs.txt")*/
                     .build();
             new Runner(options).run();
         }
