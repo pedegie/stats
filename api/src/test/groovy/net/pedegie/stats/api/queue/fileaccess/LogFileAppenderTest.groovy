@@ -53,7 +53,7 @@ class LogFileAppenderTest extends Specification
             queue.close()
             probes = ByteBuffer.wrap(Files.readAllBytes(testQueuePath))
         then:
-            probes.getInt() == 0
+            probes.limit() == 0
     }
 
     def "should create new file with current date if 'newFileWithDate' parameter is set"()

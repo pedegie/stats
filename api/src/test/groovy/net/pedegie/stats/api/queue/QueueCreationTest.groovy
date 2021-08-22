@@ -11,6 +11,16 @@ class QueueCreationTest extends Specification
 {
     private static final Path QUEUE_PATH = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue.log")
 
+    def setup()
+    {
+        Files.deleteIfExists(QUEUE_PATH)
+    }
+
+    def cleanupSpec()
+    {
+        Files.deleteIfExists(QUEUE_PATH)
+    }
+
     def "should throw an exception on misconfiguration log file creation"()
     {
         when:
@@ -108,6 +118,23 @@ class QueueCreationTest extends Specification
         cleanup:
             queue.close()
             Files.deleteIfExists(nestedFilePath)
+    }
+
+    def "should throw an exception if mmap size is less than 0"()
+    {
+        given:
+            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+                    .override(true)
+                    .path(QUEUE_PATH)
+                    .mmapSize(-1)
+                    .build()
+        when:
+            MPMCQueueStats.<Integer> builder()
+                    .queue(new ConcurrentLinkedQueue<Integer>())
+                    .logFileConfiguration(logFileConfiguration)
+                    .build()
+        then:
+            thrown(IllegalArgumentException)
     }
 
     private static void createQueue(LogFileConfiguration logFileConfiguration)
