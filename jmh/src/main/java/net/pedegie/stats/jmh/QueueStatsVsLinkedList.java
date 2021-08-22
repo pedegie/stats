@@ -112,7 +112,7 @@ public class QueueStatsVsLinkedList
     {
 
         Options options = new OptionsBuilder()
-                .include(TestBenchmark3.class.getSimpleName())
+                .include(QueueStatsVsLinkedList.class.getSimpleName())
                 /*      .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
                               "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
                               "-XX:LogFile=jit_logs.txt")*/

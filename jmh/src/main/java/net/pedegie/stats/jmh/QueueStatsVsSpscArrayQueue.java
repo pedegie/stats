@@ -87,7 +87,7 @@ public class QueueStatsVsSpscArrayQueue
         {
 
             Options options = new OptionsBuilder()
-                    .include(TestBenchmark2.class.getSimpleName())
+                    .include(QueueStatsVsSpscArrayQueue.class.getSimpleName())
                     /*              .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
                                           "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
                                           "-XX:LogFile=jit_logs.txt")*/

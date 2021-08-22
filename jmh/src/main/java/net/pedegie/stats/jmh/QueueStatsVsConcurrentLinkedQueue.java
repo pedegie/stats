@@ -104,7 +104,7 @@ public class QueueStatsVsConcurrentLinkedQueue
         {
 
             Options options = new OptionsBuilder()
-                    .include(TestBenchmark.class.getSimpleName())
+                    .include(QueueStatsVsConcurrentLinkedQueue.class.getSimpleName())
                     /*      .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
                                   "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
                                   "-XX:LogFile=jit_logs.txt")*/
