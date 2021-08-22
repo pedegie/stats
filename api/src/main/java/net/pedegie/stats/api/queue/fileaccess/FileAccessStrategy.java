@@ -24,11 +24,7 @@ public class FileAccessStrategy
         {
             Files.deleteIfExists(path);
             return fileAccess(path, mmapSize);
-        } else if (logFileConfiguration.isNewFileWithDate())
-        {
-            var fileName = PathDateFormatter.appendDate(path);
-            return fileAccess(fileName, mmapSize);
-        } else
+        } else if (logFileConfiguration.isAppend())
         {
             boolean exists = Files.exists(path);
             var fileAccess = fileAccess(path, mmapSize);
@@ -40,6 +36,10 @@ public class FileAccessStrategy
             }
 
             return fileAccess;
+        } else
+        {
+            var fileName = PathDateFormatter.appendDate(path);
+            return fileAccess(fileName, mmapSize);
         }
     }
 
