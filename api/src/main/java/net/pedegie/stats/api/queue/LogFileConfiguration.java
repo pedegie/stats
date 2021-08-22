@@ -16,4 +16,5 @@ public class LogFileConfiguration
     boolean override;
     boolean append;
     boolean newFileWithDate;
+    int mmapSize;
 }

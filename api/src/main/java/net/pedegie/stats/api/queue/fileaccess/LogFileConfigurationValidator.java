@@ -13,6 +13,11 @@ class LogFileConfigurationValidator
         Objects.requireNonNull(logFileConfiguration);
         Objects.requireNonNull(logFileConfiguration.getPath());
 
+        if (logFileConfiguration.getMmapSize() < 0)
+        {
+            throw new IllegalArgumentException(EXCEPTION_HEADER + "'mmapSize' cannot be less than 0");
+        }
+
         if (logFileConfiguration.isAppend())
         {
             if (logFileConfiguration.isNewFileWithDate())

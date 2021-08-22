@@ -50,14 +50,12 @@ public class QueueStatsVsLinkedList
         public void LinkedList(Blackhole blackhole, QueueConfiguration queueConfiguration)
         {
             runBenchmark(queueConfiguration.linkedList, blackhole);
-            queueConfiguration.mpmcQueueStatsLinkedList.resetOffset();
         }
 
         @Benchmark
         public void MPMCQueueStatsLinkedList(Blackhole blackhole, QueueConfiguration queueConfiguration)
         {
             runBenchmark(queueConfiguration.mpmcQueueStatsLinkedList, blackhole);
-            queueConfiguration.mpmcQueueStatsLinkedList.resetOffset();
         }
 
         private static void runBenchmark(Queue<Integer> queue, Blackhole blackhole)

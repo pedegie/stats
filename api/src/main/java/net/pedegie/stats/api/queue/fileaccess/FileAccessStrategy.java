@@ -3,42 +3,40 @@ package net.pedegie.stats.api.queue.fileaccess;
 import lombok.SneakyThrows;
 import net.pedegie.stats.api.queue.LogFileConfiguration;
 
-import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static net.pedegie.stats.api.queue.fileaccess.FileAccess.LONG_SIZE;
+import static net.pedegie.stats.api.queue.fileaccess.FileAccess.TIMESTAMP_SIZE;
 
 public class FileAccessStrategy
 {
     private static final int BUFFER_FULL = -1;
-    private static final int MB_500 = 1024 * 1024 * 512;
 
     @SneakyThrows
     public static FileAccess accept(LogFileConfiguration logFileConfiguration)
     {
         LogFileConfigurationValidator.validate(logFileConfiguration);
         Path path = logFileConfiguration.getPath();
+        var mmapSize = logFileConfiguration.getMmapSize();
 
         if (logFileConfiguration.isOverride())
         {
             Files.deleteIfExists(path);
-            return fileAccess(path);
+            return fileAccess(path, mmapSize);
         } else if (logFileConfiguration.isNewFileWithDate())
         {
             var fileName = PathDateFormatter.appendDate(path);
-            return fileAccess(fileName);
+            return fileAccess(fileName, mmapSize);
         } else
         {
             boolean exists = Files.exists(path);
-            var fileAccess = fileAccess(path);
+            var fileAccess = fileAccess(path, mmapSize);
             if (exists)
             {
                 var firstFreeIndex = findFirstFreeIndex(fileAccess.mappedFileBuffer);
                 fileAccess.mappedFileBuffer.position(firstFreeIndex);
-                fileAccess.fileOffset.set(firstFreeIndex);
+                fileAccess.bufferOffset.set(firstFreeIndex);
             }
 
             return fileAccess;
@@ -54,7 +52,7 @@ public class FileAccessStrategy
         while (low < high)
         {
             int mid = (int) ((low + high) / 2);
-            for (int i = mid; i < mid + LONG_SIZE; i++)
+            for (int i = mid; i < mid + TIMESTAMP_SIZE; i++)
             {
                 if (buffer.get(i) != 0)
                 {
@@ -74,12 +72,10 @@ public class FileAccessStrategy
     }
 
     @SneakyThrows
-    private static FileAccess fileAccess(Path filePath)
+    private static FileAccess fileAccess(Path filePath, int mmapSize)
     {
         createFile(filePath);
-        var logFileAccess = new RandomAccessFile(filePath.toFile(), "rw");
-        var statsLogFile = logFileAccess.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, MB_500);
-        return new FileAccess(logFileAccess, statsLogFile);
+        return new FileAccess(filePath, mmapSize);
     }
 
     @SneakyThrows
