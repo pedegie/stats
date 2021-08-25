@@ -36,7 +36,7 @@ QueueStatsVsLinkedList.TestBenchmark3.MPMCQueueStatsLinkedList  avgt    5  4.399
 public class QueueStatsVsLinkedList
 {
     @Fork(value = 1)
-    @Warmup(iterations = 2)
+    @Warmup(iterations = 5)
     @Measurement(iterations = 5)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     @BenchmarkMode({Mode.AverageTime})

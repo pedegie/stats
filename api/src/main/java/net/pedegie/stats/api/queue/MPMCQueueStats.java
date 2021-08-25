@@ -72,8 +72,8 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         if (added)
         {
             int count = this.count.incrementAndGet();
-            long nanoTime = System.nanoTime();
-            write(count, nanoTime);
+            long time = System.currentTimeMillis();
+            write(count, time);
         }
         return added;
     }
@@ -85,8 +85,8 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         if (removed)
         {
             int count = this.count.decrementAndGet();
-            long nanoTime = System.nanoTime();
-            write(count, nanoTime);
+            long time = System.currentTimeMillis();
+            write(count, time);
         }
         return removed;
     }
@@ -104,8 +104,8 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         if (added)
         {
             int count = this.count.addAndGet(c.size());
-            long nanoTime = System.nanoTime();
-            write(count, nanoTime);
+            long time = System.currentTimeMillis();
+            write(count, time);
         }
         return added;
     }
@@ -137,8 +137,8 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     {
         var currentSize = queue.size();
         count.set(currentSize);
-        long nanoTime = System.nanoTime();
-        write(currentSize, nanoTime);
+        long time = System.currentTimeMillis();
+        write(currentSize, time);
     }
 
     @Override
@@ -146,8 +146,8 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     {
         queue.clear();
         count.set(0);
-        long nanoTime = System.nanoTime();
-        write(0, nanoTime);
+        long time = System.currentTimeMillis();
+        write(0, time);
     }
 
     @Override
@@ -157,8 +157,8 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         if (offered)
         {
             int count = this.count.incrementAndGet();
-            long nanoTime = System.nanoTime();
-            write(count, nanoTime);
+            long time = System.currentTimeMillis();
+            write(count, time);
         }
         return offered;
     }
@@ -168,8 +168,8 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     {
         T removed = queue.remove();
         int count = this.count.decrementAndGet();
-        long nanoTime = System.nanoTime();
-        write(count, nanoTime);
+        long time = System.currentTimeMillis();
+        write(count, time);
         return removed;
     }
 
@@ -180,8 +180,8 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         if (polled != null)
         {
             int count = this.count.decrementAndGet();
-            long nanoTime = System.nanoTime();
-            write(count, nanoTime);
+            long time = System.currentTimeMillis();
+            write(count, time);
         }
         return polled;
     }
@@ -210,9 +210,9 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         fileAccess.close();
     }
 
-    protected void write(int count, long nanoTime)
+    protected void write(int count, long time)
     {
-        fileAccess.writeProbe(count, nanoTime);
+        fileAccess.writeProbe(count, time);
     }
 
     @FieldDefaults(level = AccessLevel.PROTECTED)

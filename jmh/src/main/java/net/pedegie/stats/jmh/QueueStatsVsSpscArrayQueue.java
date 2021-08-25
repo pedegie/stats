@@ -36,8 +36,8 @@ QueueStatsVsSpscArrayQueue.TestBenchmark2.spscArrayQueue                avgt    
 public class QueueStatsVsSpscArrayQueue
 {
     @Fork(value = 1)
-    @Warmup(iterations = 2)
-    @Measurement(iterations = 3)
+    @Warmup(iterations = 5)
+    @Measurement(iterations = 4)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     @BenchmarkMode({Mode.AverageTime})
     @State(Scope.Benchmark)
