@@ -29,8 +29,8 @@ import java.util.concurrent.TimeUnit;
 
 /*
 Benchmark                                                       Mode  Cnt  Score   Error  Units
-QueueStatsVsLinkedList.TestBenchmark3.LinkedList                avgt    5  0.754 ± 0.039  ms/op
-QueueStatsVsLinkedList.TestBenchmark3.MPMCQueueStatsLinkedList  avgt    5  3.687 ± 0.065  ms/op
+QueueStatsVsLinkedList.TestBenchmark3.LinkedList                avgt    5  0.776 ± 0.015  ms/op
+QueueStatsVsLinkedList.TestBenchmark3.MPMCQueueStatsLinkedList  avgt    5  4.399 ± 0.209  ms/op
 */
 
 public class QueueStatsVsLinkedList
@@ -94,6 +94,7 @@ public class QueueStatsVsLinkedList
             {
                 var logFileConfiguration = LogFileConfiguration.builder()
                         .path(testQueuePath)
+                        .mmapSize(Integer.MAX_VALUE)
                         .override(true)
                         .build();
 

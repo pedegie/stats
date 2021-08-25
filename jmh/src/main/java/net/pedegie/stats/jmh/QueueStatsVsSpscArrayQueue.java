@@ -28,9 +28,9 @@ import java.util.function.Supplier;
 import static net.pedegie.stats.jmh.Benchmark.runBenchmarkForQueue;
 
 /*
-Benchmark                                                               Mode  Cnt     Score    Error  Units
-QueueStatsVsSpscArrayQueue.TestBenchmark2.MPMCQueueStatsSpscArrayQueue  avgt    3  2708.351 ± 50.284  ms/op
-QueueStatsVsSpscArrayQueue.TestBenchmark2.spscArrayQueue                avgt    3  2704.034 ±  7.238  ms/op
+Benchmark                                                               Mode  Cnt   Score   Error  Units
+QueueStatsVsSpscArrayQueue.TestBenchmark2.MPMCQueueStatsSpscArrayQueue  avgt    3  13.358 ± 7.664  ms/op
+QueueStatsVsSpscArrayQueue.TestBenchmark2.spscArrayQueue                avgt    3   2.330 ± 0.417  ms/op
 */
 
 public class QueueStatsVsSpscArrayQueue
@@ -70,6 +70,7 @@ public class QueueStatsVsSpscArrayQueue
             {
                 var logFileConfiguration = LogFileConfiguration.builder()
                         .path(testQueuePath)
+                        .mmapSize(Integer.MAX_VALUE)
                         .override(true)
                         .build();
 

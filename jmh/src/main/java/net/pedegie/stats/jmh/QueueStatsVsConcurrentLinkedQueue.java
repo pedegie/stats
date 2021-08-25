@@ -28,23 +28,24 @@ import java.util.function.Supplier;
 
 import static net.pedegie.stats.jmh.Benchmark.runBenchmarkForQueue;
 
-/*Benchmark                                                          (threads)  Mode  Cnt     Score      Error  Units
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue          1  avgt    3  2713.791 ±   86.120  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue          2  avgt    3  2730.953 ±  112.431  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue          4  avgt    3  2742.108 ±   91.329  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue          8  avgt    3  2884.171 ± 2333.550  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         16  avgt    3  2937.123 ±  633.752  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         32  avgt    3  3103.091 ± 1886.084  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue         64  avgt    3  3201.386 ± 4283.620  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.ConcurrentLinkedQueue        128  avgt    3  3811.099 ± 3760.723  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads          1  avgt    3  2724.187 ±   68.131  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads          2  avgt    3  2749.065 ±   24.299  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads          4  avgt    3  2755.208 ±   40.718  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads          8  avgt    3  2891.358 ± 2116.058  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         16  avgt    3  2949.689 ±  657.005  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         32  avgt    3  3061.542 ± 2517.398  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads         64  avgt    3  3077.744 ± 1597.093  ms/op
-MPMCQueueStatsPerformanceTest.TestBenchmark.MPMCQueueStatsThreads        128  avgt    3  3791.936 ± 4803.237  ms/op
+/*
+Benchmark                                                                            (threads)  Mode  Cnt     Score      Error  Units
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                        1  avgt    3     6.643 ±    1.001  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                        2  avgt    3    24.140 ±   26.591  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                        4  avgt    3    37.187 ±   79.630  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                        8  avgt    3   109.204 ±  584.272  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                       16  avgt    3   352.127 ±  349.541  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                       32  avgt    3   652.617 ± 2484.780  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                       64  avgt    3  1442.987 ± 1378.706  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                      128  avgt    3  2909.990 ± 3230.944  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue          1  avgt    3    17.692 ±   21.788  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue          2  avgt    3    39.007 ±   14.640  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue          4  avgt    3    74.890 ±   85.103  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue          8  avgt    3   189.647 ±   65.109  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue         16  avgt    3   415.680 ±   53.561  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue         32  avgt    3   822.984 ±  690.411  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue         64  avgt    3  1774.190 ±  201.418  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue        128  avgt    3  4035.729 ± 2351.217  ms/op
 */
 
 
