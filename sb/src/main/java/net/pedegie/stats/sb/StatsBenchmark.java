@@ -28,12 +28,11 @@ public class StatsBenchmark
     private static final Logger log = LogManager.getLogger(StatsBenchmark.class);
 
     private static final Path statsQueue = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
-    private static final Timeout BENCHMARK_TIMEOUT = new Timeout(TimeUnit.SECONDS, 60);
+    private static final Timeout BENCHMARK_TIMEOUT = new Timeout(TimeUnit.SECONDS, 120);
 
     public static void main(String[] args) throws InterruptedException, ExecutionException, TimeoutException
     {
         var programArguments = ProgramArguments.initialize(args);
-        cleanStatsQueueDirectory();
         var queueStats = createStatsQueue();
 
         Runnable putIntegers = () ->
@@ -54,7 +53,6 @@ public class StatsBenchmark
                 var elem = queueStats.poll();
                 if (elem != null)
                 {
-                    log.debug("Consuming {}", elem);
                     if (elem == POISON_PILL)
                     {
                         break;
@@ -121,6 +119,7 @@ public class StatsBenchmark
     {
         var logFileConfiguration = LogFileConfiguration.builder()
                 .path(statsQueue)
+                .mmapSize(Integer.MAX_VALUE)
                 .override(true)
                 .build();
 
@@ -128,19 +127,6 @@ public class StatsBenchmark
                 .queue(new ConcurrentLinkedQueue<>())
                 .logFileConfiguration(logFileConfiguration)
                 .build();
-    }
-
-    private static void cleanStatsQueueDirectory()
-    {
-        var dir = new File(statsQueue.toString());
-        File[] files = dir.listFiles();
-        if (files != null)
-        {
-            for (File file : files)
-                if (!file.isDirectory())
-                    if (!file.delete())
-                        throw new IllegalStateException("Cannot delete " + file.getAbsolutePath());
-        }
     }
 
     private static long toNanos(double delayMillisToWaitBetweenMessages)

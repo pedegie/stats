@@ -32,9 +32,9 @@ public class FileAccess implements Closeable
     FileChannel channel;
 
     AtomicInteger bufferOffset = new AtomicInteger(0);
-
     Path filePath;
     int mmapSize;
+    int bufferLimit;
 
     @NonFinal
     long fileSize;
@@ -47,52 +47,43 @@ public class FileAccess implements Closeable
         this.mmapSize = mmapSize == 0 ? MB_500 : roundToPageSize(mmapSize);
         this.channel = fileAccess.getChannel();
         this.mappedFileBuffer = channel.map(FileChannel.MapMode.READ_WRITE, 0, this.mmapSize);
+        this.bufferLimit = mappedFileBuffer.limit();
     }
 
     public void writeProbe(int probe, long timestamp)
     {
         int offset = nextOffset();
-        try
+        int sumBytes = offset + PROBE_AND_TIMESTAMP_BYTES_SUM;
+        if(sumBytes >= bufferLimit || sumBytes < 0)
+        {
+            if (resizeLock.tryLock())
+            {
+                try
+                {
+                    resize();
+                    mappedFileBuffer.putInt(0, probe);
+                    mappedFileBuffer.putLong(PROBE_SIZE, timestamp);
+                } finally
+                {
+                    resizeLock.unlock();
+                }
+            }
+        } else
         {
             mappedFileBuffer.putInt(offset, probe);
             mappedFileBuffer.putLong(offset + PROBE_SIZE, timestamp);
-        } catch (IndexOutOfBoundsException exc)
-        {
-            int sumBytes = offset + PROBE_AND_TIMESTAMP_BYTES_SUM;
-            if (sumBytes >= mappedFileBuffer.limit() || sumBytes < 0)
-            {
-                if (resizeLock.tryLock())
-                {
-                    try
-                    {
-                        resize();
-                        offset = nextOffset();
-                        mappedFileBuffer.putInt(offset, probe);
-                        mappedFileBuffer.putLong(offset + PROBE_SIZE, timestamp);
-                    } finally
-                    {
-                        resizeLock.unlock();
-                    }
-                }
-            } else
-            {
-                throw exc;
-            }
-        } catch (NullPointerException e)
-        {
-            // resizing, ignore
         }
     }
 
     @SneakyThrows
     private void resize()
     {
-        this.fileSize = fileSize + (bufferOffset.get() - PROBE_AND_TIMESTAMP_BYTES_SUM);
+        this.fileSize += bufferLimit - (bufferLimit % PROBE_AND_TIMESTAMP_BYTES_SUM);
         close(fileSize);
         this.fileAccess = new RandomAccessFile(filePath.toFile(), "rw");
         this.channel = fileAccess.getChannel();
         this.mappedFileBuffer = channel.map(FileChannel.MapMode.READ_WRITE, fileSize, mmapSize);
-        this.bufferOffset.set(0);
+        this.bufferOffset.set(PROBE_AND_TIMESTAMP_BYTES_SUM);
 
     }
 
@@ -113,7 +104,7 @@ public class FileAccess implements Closeable
     {
         channel.truncate(truncate);
         fileAccess.close();
-        boolean unmapOnClose = true; // todo
+        boolean unmapOnClose = false; // todo
         if (unmapOnClose)
         {
             fileAccess = null;

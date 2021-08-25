@@ -9,12 +9,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
 public class Benchmark
 {
+    private static final int POISON_PILL = -1;
+
     public static Supplier<Void> runBenchmarkForQueue(Queue<Integer> queue, int threads)
     {
         int messagesToSendPerThread = 50000;
@@ -23,10 +25,8 @@ public class Benchmark
             for (int i = 1; i <= messagesToSendPerThread; i++)
             {
                 queue.add(i);
-                LockSupport.parkNanos(1_000);
             }
-
-            IntStream.range(0, threads).forEach(i -> queue.add(-1));
+            queue.add(POISON_PILL);
         };
         Runnable consumer = () ->
         {
@@ -35,7 +35,7 @@ public class Benchmark
                 Integer element = queue.poll();
                 if (element != null)
                 {
-                    if (element == -1)
+                    if (element == POISON_PILL)
                     {
                         break;
                     }
@@ -43,10 +43,11 @@ public class Benchmark
             }
         };
 
+
         return () ->
         {
-            var producerThreadPool = Executors.newFixedThreadPool(threads, new NamedThreadFactory("producer_pool"));
-            var consumerThreadPool = Executors.newFixedThreadPool(threads, new NamedThreadFactory("consumer_pool"));
+            var producerThreadPool = Executors.newFixedThreadPool(threads, new NamedThreadFactory("producer_pool-%d"));
+            var consumerThreadPool = Executors.newFixedThreadPool(threads, new NamedThreadFactory("consumer_pool-%d"));
 
             List<CompletableFuture<?>> futures = new ArrayList<>(threads * 2);
             IntStream.range(0, threads).forEach(index ->
@@ -80,6 +81,8 @@ public class Benchmark
 
     static class NamedThreadFactory implements ThreadFactory
     {
+        private final AtomicInteger threadNumber = new AtomicInteger(0);
+
         private final String name;
 
         public NamedThreadFactory(String name)
@@ -89,7 +92,7 @@ public class Benchmark
 
         public Thread newThread(@NotNull Runnable r)
         {
-            return new Thread(r, name);
+            return new Thread(r, String.format(name, threadNumber.incrementAndGet()));
         }
     }
 }
