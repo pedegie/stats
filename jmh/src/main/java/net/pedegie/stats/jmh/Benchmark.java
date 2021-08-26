@@ -43,7 +43,6 @@ public class Benchmark
             }
         };
 
-
         return () ->
         {
             var producerThreadPool = Executors.newFixedThreadPool(threads, new NamedThreadFactory("producer_pool-%d"));

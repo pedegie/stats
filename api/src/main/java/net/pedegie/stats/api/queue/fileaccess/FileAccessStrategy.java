@@ -74,21 +74,6 @@ public class FileAccessStrategy
     @SneakyThrows
     private static FileAccess fileAccess(Path filePath, int mmapSize)
     {
-        createFile(filePath);
         return new FileAccess(filePath, mmapSize);
-    }
-
-    @SneakyThrows
-    private static void createFile(Path path)
-    {
-        if (Files.exists(path))
-        {
-            return;
-        }
-        if (!Files.exists(path.getParent()))
-        {
-            Files.createDirectories(path.getParent());
-        }
-        Files.createFile(path);
     }
 }
