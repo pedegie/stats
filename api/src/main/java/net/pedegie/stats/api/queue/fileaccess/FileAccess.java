@@ -6,6 +6,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -21,7 +22,6 @@ public class FileAccess implements Closeable
     private static final int PROBE_AND_TIMESTAMP_BYTES_SUM = PROBE_SIZE + TIMESTAMP_SIZE;
 
     private static final int MB_500 = 1024 * 1024 * 512;
-    private static final int PAGE_SIZE = 4096;
 
     ReentrantLock resizeLock = new ReentrantLock();
     @NonFinal
@@ -42,11 +42,10 @@ public class FileAccess implements Closeable
     @SneakyThrows
     public FileAccess(Path filePath, int mmapSize)
     {
-        this.fileAccess = new RandomAccessFile(filePath.toFile(), "rw");
+        FileUtils.createFile(filePath);
         this.filePath = filePath;
-        this.mmapSize = mmapSize == 0 ? MB_500 : roundToPageSize(mmapSize);
-        this.channel = fileAccess.getChannel();
-        this.mappedFileBuffer = channel.map(FileChannel.MapMode.READ_WRITE, 0, this.mmapSize);
+        this.mmapSize = mmapSize == 0 ? MB_500 : FileUtils.roundToPageSize(mmapSize);
+        mmap();
         this.bufferLimit = mappedFileBuffer.limit();
     }
 
@@ -54,7 +53,7 @@ public class FileAccess implements Closeable
     {
         int offset = nextOffset();
         int sumBytes = offset + PROBE_AND_TIMESTAMP_BYTES_SUM;
-        if(sumBytes >= bufferLimit || sumBytes < 0)
+        if (sumBytes >= bufferLimit || sumBytes < 0)
         {
             if (resizeLock.tryLock())
             {
@@ -68,6 +67,7 @@ public class FileAccess implements Closeable
                     resizeLock.unlock();
                 }
             }
+            // drop probes during resize
         } else
         {
             mappedFileBuffer.putInt(offset, probe);
@@ -80,11 +80,16 @@ public class FileAccess implements Closeable
     {
         this.fileSize += bufferLimit - (bufferLimit % PROBE_AND_TIMESTAMP_BYTES_SUM);
         close(fileSize);
+        mmap();
+        this.bufferOffset.set(PROBE_AND_TIMESTAMP_BYTES_SUM);
+    }
+
+    private void mmap() throws IOException
+    {
         this.fileAccess = new RandomAccessFile(filePath.toFile(), "rw");
         this.channel = fileAccess.getChannel();
         this.mappedFileBuffer = channel.map(FileChannel.MapMode.READ_WRITE, fileSize, mmapSize);
-        this.bufferOffset.set(PROBE_AND_TIMESTAMP_BYTES_SUM);
-
+        PreToucher.preTouch(mappedFileBuffer);
     }
 
     private int nextOffset()
@@ -93,7 +98,6 @@ public class FileAccess implements Closeable
     }
 
     @Override
-    @SneakyThrows
     public void close()
     {
         close(fileSize + bufferOffset.get());
@@ -113,15 +117,4 @@ public class FileAccess implements Closeable
             System.gc();
         }
     }
-
-    private static int roundToPageSize(int mmapSize)
-    {
-        int rounded = mmapSize + PAGE_SIZE - 1 & (-PAGE_SIZE);
-        if (rounded < 0)
-        {
-            return Integer.MAX_VALUE;
-        }
-        return rounded;
-    }
-
 }
