@@ -71,7 +71,6 @@ public class QueueStatsVsSpscArrayQueue
                 var logFileConfiguration = LogFileConfiguration.builder()
                         .path(testQueuePath)
                         .mmapSize(Integer.MAX_VALUE)
-                        .override(true)
                         .build();
 
                 MPMCQueueStats<Integer> mpmcQueueStatsSpscArrayQueue = MPMCQueueStats.<Integer>builder()

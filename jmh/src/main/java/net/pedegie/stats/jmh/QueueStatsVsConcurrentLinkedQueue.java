@@ -88,7 +88,6 @@ public class QueueStatsVsConcurrentLinkedQueue
             {
                 var logFileConfiguration = LogFileConfiguration.builder()
                         .path(testQueuePath)
-                        .override(true)
                         .mmapSize(Integer.MAX_VALUE)
                         .build();
 
