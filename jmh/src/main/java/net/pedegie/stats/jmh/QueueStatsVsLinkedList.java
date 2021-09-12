@@ -95,7 +95,6 @@ public class QueueStatsVsLinkedList
                 var logFileConfiguration = LogFileConfiguration.builder()
                         .path(testQueuePath)
                         .mmapSize(Integer.MAX_VALUE)
-                        .override(true)
                         .build();
 
                 mpmcQueueStatsLinkedList = MPMCQueueStats.<Integer>builder()

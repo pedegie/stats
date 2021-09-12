@@ -1,27 +1,24 @@
 package net.pedegie.stats.api.queue
 
+import net.pedegie.stats.api.queue.fileaccess.FileUtils
 import spock.lang.Specification
 
-import java.nio.file.Path
-import java.nio.file.Paths
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentLinkedQueue
 
 class MPMCQueueStatsTest extends Specification
 {
-    private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir").toString(), "stats_queue").toAbsolutePath()
-
     private MPMCQueueStats<Integer> mpmcQueueStats
 
     def setup()
     {
-        deleteTestFile()
+        FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
         mpmcQueueStats = createQueue(new ConcurrentLinkedQueue<Integer>())
     }
 
-    private static deleteTestFile()
+    def cleanupSpec()
     {
-        new File(testQueuePath.toString()).delete()
+        FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
     def "should correctly add element"()
@@ -192,8 +189,7 @@ class MPMCQueueStatsTest extends Specification
     {
         LogFileConfiguration logFileConfiguration = LogFileConfiguration
                 .builder()
-                .path(testQueuePath)
-                .override(true)
+                .path(TestQueueUtil.PATH)
                 .build()
 
         return MPMCQueueStats.<Integer> builder()

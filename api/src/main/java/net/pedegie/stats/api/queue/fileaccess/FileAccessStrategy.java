@@ -1,64 +1,57 @@
 package net.pedegie.stats.api.queue.fileaccess;
 
 import lombok.SneakyThrows;
-import net.pedegie.stats.api.queue.LogFileConfiguration;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static net.pedegie.stats.api.queue.fileaccess.FileAccess.TIMESTAMP_SIZE;
+import static net.pedegie.stats.api.queue.fileaccess.FileAccess.PROBE_SIZE;
 
 public class FileAccessStrategy
 {
-    private static final int BUFFER_FULL = -1;
-
     @SneakyThrows
-    public static FileAccess accept(LogFileConfiguration logFileConfiguration)
+    public static FileAccess accept(int mmapSize, Path fileName)
     {
-        LogFileConfigurationValidator.validate(logFileConfiguration);
-        Path path = logFileConfiguration.getPath();
-        var mmapSize = logFileConfiguration.getMmapSize();
-
-        if (logFileConfiguration.isOverride())
+        boolean exists = Files.exists(fileName);
+        var fileAccess = fileAccess(fileName, mmapSize);
+        if (exists)
         {
-            Files.deleteIfExists(path);
-            return fileAccess(path, mmapSize);
-        } else if (logFileConfiguration.isAppend())
-        {
-            boolean exists = Files.exists(path);
-            var fileAccess = fileAccess(path, mmapSize);
-            if (exists)
-            {
-                var firstFreeIndex = findFirstFreeIndex(fileAccess.mappedFileBuffer);
-                fileAccess.mappedFileBuffer.position(firstFreeIndex);
-                fileAccess.bufferOffset.set(firstFreeIndex);
-            }
-
-            return fileAccess;
-        } else
-        {
-            var fileName = PathDateFormatter.appendDate(path);
-            return fileAccess(fileName, mmapSize);
+            var firstFreeIndex = findFirstFreeIndex(fileAccess.mappedFileBuffer);
+            fileAccess.mappedFileBuffer.position(firstFreeIndex);
+            fileAccess.bufferOffset.set(firstFreeIndex);
         }
+        return fileAccess;
     }
 
     private static int findFirstFreeIndex(ByteBuffer buffer)
     {
-        long low = 0;
-        long high = buffer.limit();
+        if (isFull(buffer))
+            return buffer.limit();
 
-        label:
+        if (isEmpty(buffer))
+            return 0;
+
+        var index = index(buffer);
+        int offset = index % PROBE_SIZE;
+        if (offset == 0)
+            return index;
+        return index - offset + PROBE_SIZE;
+    }
+
+    private static int index(ByteBuffer buffer)
+    {
+        var low = 0;
+        var high = buffer.limit() - PROBE_SIZE;
+
         while (low < high)
         {
-            int mid = (int) ((low + high) / 2);
-            for (int i = mid; i < mid + TIMESTAMP_SIZE; i++)
+            int mid = (low + high) / 2;
+
+            if (buffer.getInt(mid) != 0)
             {
-                if (buffer.get(i) != 0)
-                {
-                    low = mid + 1;
-                    continue label;
-                }
+                low = mid + 1;
+                continue;
             }
 
             if (buffer.get(mid - 1) != 0)
@@ -68,10 +61,19 @@ public class FileAccessStrategy
 
             high = mid;
         }
-        return BUFFER_FULL;
+        return high;
     }
 
-    @SneakyThrows
+    private static boolean isEmpty(ByteBuffer buffer)
+    {
+        return buffer.getLong(0) == 0;
+    }
+
+    private static boolean isFull(ByteBuffer buffer)
+    {
+        return buffer.getInt(buffer.limit() - PROBE_SIZE) != 0;
+    }
+
     private static FileAccess fileAccess(Path filePath, int mmapSize)
     {
         return new FileAccess(filePath, mmapSize);

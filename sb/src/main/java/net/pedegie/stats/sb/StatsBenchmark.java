@@ -106,7 +106,6 @@ public class StatsBenchmark
         var logFileConfiguration = LogFileConfiguration.builder()
                 .path(statsQueue)
                 .mmapSize(Integer.MAX_VALUE)
-                .override(true)
                 .build();
 
         return MPMCQueueStats.<Integer>builder()

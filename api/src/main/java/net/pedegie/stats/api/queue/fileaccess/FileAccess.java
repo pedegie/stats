@@ -1,12 +1,12 @@
 package net.pedegie.stats.api.queue.fileaccess;
 
 import lombok.AccessLevel;
+import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -17,9 +17,9 @@ import java.util.concurrent.locks.ReentrantLock;
 @FieldDefaults(level = AccessLevel.PROTECTED, makeFinal = true)
 public class FileAccess implements Closeable
 {
-    private static final int PROBE_SIZE = 4;
+    static final int PROBE_SIZE = 4;
     static final int TIMESTAMP_SIZE = 8;
-    private static final int PROBE_AND_TIMESTAMP_BYTES_SUM = PROBE_SIZE + TIMESTAMP_SIZE;
+    static final int PROBE_AND_TIMESTAMP_BYTES_SUM = PROBE_SIZE + TIMESTAMP_SIZE;
 
     private static final int MB_500 = 1024 * 1024 * 512;
 
@@ -32,6 +32,7 @@ public class FileAccess implements Closeable
     FileChannel channel;
 
     AtomicInteger bufferOffset = new AtomicInteger(0);
+    @Getter
     Path filePath;
     int mmapSize;
     int bufferLimit;
@@ -75,7 +76,6 @@ public class FileAccess implements Closeable
         }
     }
 
-    @SneakyThrows
     private void resize()
     {
         this.fileSize += bufferLimit - (bufferLimit % PROBE_AND_TIMESTAMP_BYTES_SUM);
@@ -84,7 +84,8 @@ public class FileAccess implements Closeable
         this.bufferOffset.set(PROBE_AND_TIMESTAMP_BYTES_SUM);
     }
 
-    private void mmap() throws IOException
+    @SneakyThrows
+    private void mmap()
     {
         this.fileAccess = new RandomAccessFile(filePath.toFile(), "rw");
         this.channel = fileAccess.getChannel();
@@ -108,7 +109,7 @@ public class FileAccess implements Closeable
     {
         channel.truncate(truncate);
         fileAccess.close();
-        boolean unmapOnClose = false; // todo
+        boolean unmapOnClose = true; // todo
         if (unmapOnClose)
         {
             fileAccess = null;
