@@ -1,6 +1,6 @@
 package net.pedegie.stats.api.queue
 
-import net.pedegie.stats.api.queue.fileaccess.FileUtils
+
 import spock.lang.Specification
 
 import java.util.concurrent.ArrayBlockingQueue

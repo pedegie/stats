@@ -1,8 +1,6 @@
 package net.pedegie.stats.api.queue
 
-import net.pedegie.stats.api.queue.fileaccess.FileAccess
-import net.pedegie.stats.api.queue.fileaccess.FileUtils
-import net.pedegie.stats.api.queue.fileaccess.PathDateFormatter
+
 import spock.lang.Specification
 import spock.lang.Unroll
 
@@ -89,6 +87,7 @@ class RecyclerTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
+                    .disableCompression(true)
                     .build()
             MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
         when: "we put 2 elements to queue"
@@ -97,7 +96,7 @@ class RecyclerTest extends Specification
             queue.close()
         then: "there are two elements in file"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == FileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 2
+            Files.readAllBytes(logFile).length == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 2
         when: "we create new queue with timestamp that matches to previous 00:00:00 one-minute window"
             time = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:00:30"), ZoneId.of("UTC"))
             logFileConfiguration = LogFileConfiguration
@@ -112,7 +111,7 @@ class RecyclerTest extends Specification
             queue.close()
             logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
         then: "there are 3 elements in file"
-            Files.readAllBytes(logFile).length == FileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
+            Files.readAllBytes(logFile).length == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
     }
 
     def "should correctly handle situation when recycle happens between writes to queue"()
@@ -124,6 +123,7 @@ class RecyclerTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
+                    .disableCompression(true)
                     .build()
             MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
         when: "we put 2 elements to queue"
@@ -143,10 +143,10 @@ class RecyclerTest extends Specification
             logFiles.get(1).toString() == PathDateFormatter.appendDate(TestQueueUtil.PATH, ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:01:00"), ZoneId.of("UTC"))).toString()
         and: "there are two elements in first file"
             Path firstCycleLogFile = logFiles.get(0)
-            Files.readAllBytes(firstCycleLogFile).length == FileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 2
-        and: "one element in next cycle file"
+            Files.readAllBytes(firstCycleLogFile).length == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 2
+        and: "one element in next file cycle"
             Path secondCycleLogFile = logFiles.get(1)
-            Files.readAllBytes(secondCycleLogFile).length == FileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM
+            Files.readAllBytes(secondCycleLogFile).length == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM
     }
 
 }
