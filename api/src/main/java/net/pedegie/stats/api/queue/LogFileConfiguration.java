@@ -3,6 +3,7 @@ package net.pedegie.stats.api.queue;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.With;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 
@@ -13,6 +14,7 @@ import java.time.temporal.ChronoUnit;
 
 @Builder
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@With
 public class LogFileConfiguration
 {
     private static final Duration DEFAULT_CYCLE_DURATION = Duration.of(1, ChronoUnit.DAYS);
@@ -23,6 +25,8 @@ public class LogFileConfiguration
     Duration fileCycleDuration;
     @NonFinal
     Clock fileCycleClock;
+    @Getter
+    boolean disableCompression;
 
     public Clock getFileCycleClock()
     {

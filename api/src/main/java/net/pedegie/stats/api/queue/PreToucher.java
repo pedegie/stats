@@ -1,4 +1,4 @@
-package net.pedegie.stats.api.queue.fileaccess;
+package net.pedegie.stats.api.queue;
 
 import net.openhft.chronicle.core.OS;
 

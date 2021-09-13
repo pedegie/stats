@@ -1,8 +1,6 @@
 package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
-import net.pedegie.stats.api.queue.fileaccess.FileAccessStrategy
-import net.pedegie.stats.api.queue.fileaccess.FileUtils
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -71,7 +69,7 @@ class QueueCreationTest extends Specification
     def "should correctly find first free index in byte buffer"()
     {
         expect:
-            FileAccessStrategy.findFirstFreeIndex(buffer) == expectedFirstFreeIndex
+            FileUtils.findFirstFreeIndex(buffer) == expectedFirstFreeIndex
         where:
             buffer                                               | expectedFirstFreeIndex
             wrap([0, 0, 0, 0, 0, 0, 0, 0, 0, 0] as byte[])       | 0

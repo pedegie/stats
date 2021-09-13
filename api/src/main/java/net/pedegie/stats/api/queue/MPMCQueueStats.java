@@ -5,18 +5,12 @@ import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import net.openhft.chronicle.core.annotation.ForceInline;
-import net.pedegie.stats.api.queue.fileaccess.FileAccess;
-import net.pedegie.stats.api.queue.fileaccess.FileAccessStrategy;
-import net.pedegie.stats.api.queue.fileaccess.PathDateFormatter;
 import net.pedegie.stats.api.tailer.Tailer;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Closeable;
-import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZonedDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
@@ -26,35 +20,26 @@ import java.util.concurrent.locks.ReentrantLock;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
 public class MPMCQueueStats<T> implements Queue<T>, Closeable
 {
-    Path filePath;
+    @NonFinal
+    LogFileConfiguration logFileConfiguration;
     Queue<T> queue;
     AtomicInteger count = new AtomicInteger(0);
     ReentrantLock recycleLock = new ReentrantLock();
-    long fileCycleDurationInMillis;
-    int mmapSize;
 
     @NonFinal
     FileAccess fileAccess;
     @NonFinal
     long nextCycleMillisTimestamp;
-    @NonFinal
-    Clock fileCycleClock;
 
-    @SneakyThrows
     protected MPMCQueueStats(Queue<T> queue, LogFileConfiguration logFileConfiguration, Tailer<Long, Integer> tailer)
     {
-        LogFileConfigurationValidator.validate(logFileConfiguration);
-        this.filePath = logFileConfiguration.getPath();
         this.queue = queue;
-        this.fileCycleClock = logFileConfiguration.getFileCycleClock();
-        this.fileCycleDurationInMillis = logFileConfiguration.getFileCycleDurationInMillis();
-        this.mmapSize = logFileConfiguration.getMmapSize();
-
+        this.logFileConfiguration = logFileConfiguration;
         if (recycleLock.tryLock())
         {
             try
             {
-                initialize();
+                initializeFileAccess(logFileConfiguration);
             } finally
             {
                 recycleLock.unlock();
@@ -62,21 +47,11 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         }
     }
 
-    private void initialize()
+    private void initializeFileAccess(LogFileConfiguration logFileConfiguration)
     {
-        var offsetDateTime = newFileOffset();
-        var fileName = PathDateFormatter.appendDate(filePath, offsetDateTime);
-        this.fileAccess = FileAccessStrategy.accept(mmapSize, fileName);
-        this.nextCycleMillisTimestamp = offsetDateTime.toInstant().toEpochMilli() + fileCycleDurationInMillis;
-    }
-
-    private ZonedDateTime newFileOffset()
-    {
-        var time = Instant.now(fileCycleClock).toEpochMilli();
-        var startIntervalTimestamp = time - (time % fileCycleDurationInMillis);
-        return Instant.ofEpochMilli(startIntervalTimestamp)
-                .atZone(fileCycleClock.getZone())
-                .truncatedTo(ChronoUnit.MINUTES);
+        var fileAccessAndNextCycleTuple = FileAccessStrategy.accept(logFileConfiguration);
+        this.fileAccess = fileAccessAndNextCycleTuple.getFileAccess();
+        this.nextCycleMillisTimestamp = fileAccessAndNextCycleTuple.getNextCycleTimestampMillis();
     }
 
     @Override
@@ -238,7 +213,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
 
     private long time()
     {
-        return Instant.now(fileCycleClock).toEpochMilli();
+        return Instant.now(logFileConfiguration.getFileCycleClock()).toEpochMilli();
     }
 
     @Override
@@ -265,7 +240,12 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         fileAccess.close();
     }
 
-    protected void write(int count, long time)
+    private void write(int count, long time)
+    {
+        write(count, time, 1);
+    }
+
+    protected void write(int count, long time, int tries)
     {
         if (time >= nextCycleMillisTimestamp)
         {
@@ -274,12 +254,16 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
                 try
                 {
                     this.fileAccess.close();
-                    initialize();
+                    initializeFileAccess(logFileConfiguration);
                 } finally
                 {
                     recycleLock.unlock();
                 }
-                write(count, time);
+                if (tries > 3)
+                {
+                    throw new IllegalStateException("Cannot recycle file");
+                }
+                write(count, time, tries + 1);
             }
             // drop writes during recycle
         } else
@@ -291,7 +275,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     // only for testing
     public void setFileCycleClock(Clock fileCycleClock)
     {
-        this.fileCycleClock = fileCycleClock;
+        this.logFileConfiguration = logFileConfiguration.withFileCycleClock(fileCycleClock);
     }
 
     @FieldDefaults(level = AccessLevel.PROTECTED)

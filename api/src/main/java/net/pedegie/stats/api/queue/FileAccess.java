@@ -1,4 +1,4 @@
-package net.pedegie.stats.api.queue.fileaccess;
+package net.pedegie.stats.api.queue;
 
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -15,12 +15,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 @FieldDefaults(level = AccessLevel.PROTECTED, makeFinal = true)
-public class FileAccess implements Closeable
+abstract class FileAccess implements Closeable
 {
-    static final int PROBE_SIZE = 4;
-    static final int TIMESTAMP_SIZE = 8;
-    static final int PROBE_AND_TIMESTAMP_BYTES_SUM = PROBE_SIZE + TIMESTAMP_SIZE;
-
     private static final int MB_500 = 1024 * 1024 * 512;
 
     ReentrantLock resizeLock = new ReentrantLock();
@@ -36,24 +32,32 @@ public class FileAccess implements Closeable
     Path filePath;
     int mmapSize;
     int bufferLimit;
-
     @NonFinal
     long fileSize;
 
     @SneakyThrows
-    public FileAccess(Path filePath, int mmapSize)
+    FileAccess(Path filePath, int mmapSize)
     {
         FileUtils.createFile(filePath);
         this.filePath = filePath;
         this.mmapSize = mmapSize == 0 ? MB_500 : FileUtils.roundToPageSize(mmapSize);
         mmap();
-        this.bufferLimit = mappedFileBuffer.limit();
+        this.bufferLimit = this.mappedFileBuffer.limit();
+
+        var firstFreeIndex = FileUtils.findFirstFreeIndex(mappedFileBuffer);
+        mappedFileBuffer.position(firstFreeIndex);
+        bufferOffset.set(firstFreeIndex);
+        PreToucher.preTouch(mappedFileBuffer);
     }
+
+    abstract int recordSize();
+
+    abstract void writeProbe(int offset, int probe, long timestamp);
 
     public void writeProbe(int probe, long timestamp)
     {
         int offset = nextOffset();
-        int sumBytes = offset + PROBE_AND_TIMESTAMP_BYTES_SUM;
+        int sumBytes = offset + recordSize();
         if (sumBytes >= bufferLimit || sumBytes < 0)
         {
             if (resizeLock.tryLock())
@@ -61,8 +65,7 @@ public class FileAccess implements Closeable
                 try
                 {
                     resize();
-                    mappedFileBuffer.putInt(0, probe);
-                    mappedFileBuffer.putLong(PROBE_SIZE, timestamp);
+                    writeProbe(0, probe, timestamp);
                 } finally
                 {
                     resizeLock.unlock();
@@ -71,17 +74,17 @@ public class FileAccess implements Closeable
             // drop probes during resize
         } else
         {
-            mappedFileBuffer.putInt(offset, probe);
-            mappedFileBuffer.putLong(offset + PROBE_SIZE, timestamp);
+            writeProbe(offset, probe, timestamp);
         }
     }
 
     private void resize()
     {
-        this.fileSize += bufferLimit - (bufferLimit % PROBE_AND_TIMESTAMP_BYTES_SUM);
+        this.fileSize += bufferLimit - (bufferLimit % recordSize());
         close(fileSize);
         mmap();
-        this.bufferOffset.set(PROBE_AND_TIMESTAMP_BYTES_SUM);
+        PreToucher.preTouch(mappedFileBuffer);
+        this.bufferOffset.set(recordSize());
     }
 
     @SneakyThrows
@@ -90,12 +93,11 @@ public class FileAccess implements Closeable
         this.fileAccess = new RandomAccessFile(filePath.toFile(), "rw");
         this.channel = fileAccess.getChannel();
         this.mappedFileBuffer = channel.map(FileChannel.MapMode.READ_WRITE, fileSize, mmapSize);
-        PreToucher.preTouch(mappedFileBuffer);
     }
 
     private int nextOffset()
     {
-        return bufferOffset.getAndAdd(PROBE_AND_TIMESTAMP_BYTES_SUM);
+        return bufferOffset.getAndAdd(recordSize());
     }
 
     @Override
