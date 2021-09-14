@@ -1,6 +1,7 @@
 package net.pedegie.stats.api.queue;
 
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
@@ -20,21 +21,25 @@ import java.util.concurrent.locks.ReentrantLock;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
 public class MPMCQueueStats<T> implements Queue<T>, Closeable
 {
-    @NonFinal
+    @NonFinal // its effectively final, mutable just for tests purposes which re-sets logFileConfiguration with new Clock
     LogFileConfiguration logFileConfiguration;
     Queue<T> queue;
     AtomicInteger count = new AtomicInteger(0);
     ReentrantLock recycleLock = new ReentrantLock();
+    WriteFilter writeFilter;
 
     @NonFinal
     FileAccess fileAccess;
     @NonFinal
     long nextCycleMillisTimestamp;
 
-    protected MPMCQueueStats(Queue<T> queue, LogFileConfiguration logFileConfiguration, Tailer<Long, Integer> tailer)
+    @Builder
+    protected MPMCQueueStats(Queue<T> queue, LogFileConfiguration logFileConfiguration, WriteFilter writeFilter, Tailer<Long, Integer> tailer)
     {
         this.queue = queue;
         this.logFileConfiguration = logFileConfiguration;
+        this.writeFilter = writeFilter == null ? WriteFilter.acceptAllFilter() : writeFilter;
+
         if (recycleLock.tryLock())
         {
             try
@@ -228,11 +233,6 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         return queue.peek();
     }
 
-    public static <T> QueueStatsBuilder<T> builder()
-    {
-        return new QueueStatsBuilder<>();
-    }
-
     @Override
     @SneakyThrows
     public void close()
@@ -242,7 +242,10 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
 
     private void write(int count, long time)
     {
-        write(count, time, 1);
+        if (writeFilter.shouldWrite(count, time))
+        {
+            write(count, time, 1);
+        }
     }
 
     protected void write(int count, long time, int tries)
@@ -276,38 +279,5 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public void setFileCycleClock(Clock fileCycleClock)
     {
         this.logFileConfiguration = logFileConfiguration.withFileCycleClock(fileCycleClock);
-    }
-
-    @FieldDefaults(level = AccessLevel.PROTECTED)
-    public static class QueueStatsBuilder<T>
-    {
-        Queue<T> queue;
-        LogFileConfiguration logFileConfiguration;
-
-        protected Tailer<Long, Integer> tailer;
-
-        public QueueStatsBuilder<T> queue(Queue<T> queue)
-        {
-            this.queue = queue;
-            return this;
-        }
-
-        public QueueStatsBuilder<T> logFileConfiguration(LogFileConfiguration logFileConfiguration)
-        {
-            this.logFileConfiguration = logFileConfiguration;
-            return this;
-        }
-
-        public QueueStatsBuilder<T> tailer(Tailer<Long, Integer> tailer)
-        {
-            this.tailer = tailer;
-            return this;
-        }
-
-        public MPMCQueueStats<T> build()
-        {
-            return new MPMCQueueStats<>(queue, logFileConfiguration, tailer);
-        }
-
     }
 }
