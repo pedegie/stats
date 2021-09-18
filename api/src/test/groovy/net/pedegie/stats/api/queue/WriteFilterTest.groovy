@@ -42,7 +42,7 @@ class WriteFilterTest extends Specification
             queue.close()
         then: "there should be only last element in file"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM
+            Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM
     }
 
     def "default write filter should be taken into account if none configured - which accepts all"()
@@ -59,6 +59,6 @@ class WriteFilterTest extends Specification
             queue.close()
         then: "there should be only last element in file"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 2
+            Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 2
     }
 }

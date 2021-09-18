@@ -1,6 +1,5 @@
 package net.pedegie.stats.api.queue
 
-
 import spock.lang.Specification
 
 import java.nio.file.Files
@@ -39,7 +38,7 @@ class CompressedFileAccessTest extends Specification
             queue.close()
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == 8 + CompressedFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
+            Files.readAllBytes(logFile).length == 8 + CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
     }
 
     def "should disable compression when cycle duration is more than Integer.MAX_VALUE millis"()
@@ -57,7 +56,7 @@ class CompressedFileAccessTest extends Specification
             queue.close()
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
+            Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
     }
 
     def "should disable compression when disable compression flag is set"()
@@ -76,7 +75,7 @@ class CompressedFileAccessTest extends Specification
             queue.close()
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
+            Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
     }
 
     def "should disable compression if recycle window matches already existing file which is not compressed file"()
@@ -98,7 +97,7 @@ class CompressedFileAccessTest extends Specification
             queue.close()
         then: "there are stored 3 non-compressed elements"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
+            Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
         when: "we create compressed queue which cycles matches to already existing one, created in previous step"
             logFileConfiguration = LogFileConfiguration
                     .builder()
@@ -113,7 +112,7 @@ class CompressedFileAccessTest extends Specification
             queue.close()
         then: "compression were disabled anyway"
             Path logFile2 = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile2).length == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 6
+            Files.readAllBytes(logFile2).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 6
     }
 
     def "should be able to append to already existing compressed file"()
@@ -131,13 +130,13 @@ class CompressedFileAccessTest extends Specification
             queue.close()
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == 8 + CompressedFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
+            Files.readAllBytes(logFile).length == 8 + CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
         when:
             queue = TestQueueUtil.createQueue(logFileConfiguration)
             queue.add(5)
             queue.close()
         then:
             Path logFile2 = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile2).length == 8 + CompressedFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * 4
+            Files.readAllBytes(logFile2).length == 8 + CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 4
     }
 }

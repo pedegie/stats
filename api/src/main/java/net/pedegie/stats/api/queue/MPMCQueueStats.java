@@ -2,9 +2,9 @@ package net.pedegie.stats.api.queue;
 
 import lombok.AccessLevel;
 import lombok.Builder;
-import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
+import lombok.extern.slf4j.Slf4j;
 import net.openhft.chronicle.core.annotation.ForceInline;
 import net.pedegie.stats.api.tailer.Tailer;
 import org.jetbrains.annotations.NotNull;
@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
+@Slf4j
 public class MPMCQueueStats<T> implements Queue<T>, Closeable
 {
     @NonFinal // its effectively final, mutable just for tests purposes which re-sets logFileConfiguration with new Clock
@@ -32,16 +33,18 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     FileAccess fileAccess;
     @NonFinal
     long nextCycleMillisTimestamp;
+    @NonFinal
+    private volatile boolean disabledDueCrash;
 
     @Builder
     protected MPMCQueueStats(Queue<T> queue, LogFileConfiguration logFileConfiguration, WriteFilter writeFilter, Tailer<Long, Integer> tailer)
     {
         this.queue = queue;
-        this.logFileConfiguration = logFileConfiguration;
         this.writeFilter = writeFilter == null ? WriteFilter.acceptAllFilter() : writeFilter;
 
         if (recycleLock.tryLock())
         {
+            this.logFileConfiguration = logFileConfiguration;
             try
             {
                 initializeFileAccess(logFileConfiguration);
@@ -54,21 +57,20 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
 
     private void initializeFileAccess(LogFileConfiguration logFileConfiguration)
     {
-        var fileAccessAndNextCycleTuple = FileAccessStrategy.accept(logFileConfiguration);
-        this.fileAccess = fileAccessAndNextCycleTuple.getFileAccess();
-        this.nextCycleMillisTimestamp = fileAccessAndNextCycleTuple.getNextCycleTimestampMillis();
+        this.fileAccess = FileAccessStrategy.accept(logFileConfiguration);
+        this.nextCycleMillisTimestamp = fileAccess.getStartCycleMillis() + logFileConfiguration.getFileCycleDurationInMillis();
     }
 
     @Override
     public int size()
     {
-        return count.get();
+        return queue.size();
     }
 
     @Override
     public boolean isEmpty()
     {
-        return count.get() == 0;
+        return queue.isEmpty();
     }
 
     @Override
@@ -99,7 +101,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public boolean add(T t)
     {
         boolean added = queue.add(t);
-        if (added)
+        if (!disabledDueCrash && added)
         {
             int count = this.count.incrementAndGet();
             long time = time();
@@ -112,7 +114,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public boolean remove(Object o)
     {
         boolean removed = queue.remove(o);
-        if (removed)
+        if (!disabledDueCrash && removed)
         {
             int count = this.count.decrementAndGet();
             long time = time();
@@ -131,7 +133,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public boolean addAll(@NotNull Collection<? extends T> c)
     {
         boolean added = queue.addAll(c);
-        if (added)
+        if (!disabledDueCrash && added)
         {
             int count = this.count.addAndGet(c.size());
             long time = time();
@@ -144,7 +146,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public boolean removeAll(@NotNull Collection<?> c)
     {
         boolean removed = queue.removeAll(c);
-        if (removed)
+        if (!disabledDueCrash && removed)
         {
             setAndWriteCurrentSize();
         }
@@ -155,7 +157,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public boolean retainAll(@NotNull Collection<?> c)
     {
         boolean retained = queue.retainAll(c);
-        if (retained)
+        if (!disabledDueCrash && retained)
         {
             setAndWriteCurrentSize();
         }
@@ -175,16 +177,19 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public void clear()
     {
         queue.clear();
-        count.set(0);
-        long time = time();
-        write(0, time);
+        if (!disabledDueCrash)
+        {
+            count.set(0);
+            long time = time();
+            write(0, time);
+        }
     }
 
     @Override
     public boolean offer(T t)
     {
         boolean offered = queue.offer(t);
-        if (offered)
+        if (!disabledDueCrash && offered)
         {
             int count = this.count.incrementAndGet();
             long time = time();
@@ -197,9 +202,12 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public T remove()
     {
         T removed = queue.remove();
-        int count = this.count.decrementAndGet();
-        long time = time();
-        write(count, time);
+        if (!disabledDueCrash)
+        {
+            int count = this.count.decrementAndGet();
+            long time = time();
+            write(count, time);
+        }
         return removed;
     }
 
@@ -207,7 +215,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public T poll()
     {
         T polled = queue.poll();
-        if (polled != null)
+        if (!disabledDueCrash && polled != null)
         {
             int count = this.count.decrementAndGet();
             long time = time();
@@ -234,7 +242,6 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     }
 
     @Override
-    @SneakyThrows
     public void close()
     {
         fileAccess.close();
@@ -242,9 +249,17 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
 
     private void write(int count, long time)
     {
-        if (writeFilter.shouldWrite(count, time))
+        try
         {
-            write(count, time, 1);
+            if (writeFilter.shouldWrite(count, time))
+            {
+                write(count, time, 1);
+            }
+        } catch (Exception e)
+        {
+            disabledDueCrash = true;
+            log.error("Error occurred during writing to log file. Disabling writing to file.", e);
+            fileAccess.close();
         }
     }
 

@@ -38,6 +38,7 @@ class MPMCQueueStatsTest extends Specification
     def "should throw an error on add if queue is full"()
     {
         given:
+            FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
             mpmcQueueStats = createQueue(new ArrayBlockingQueue<Integer>(1))
         when:
             mpmcQueueStats.add(1)
@@ -123,6 +124,7 @@ class MPMCQueueStatsTest extends Specification
     def "should correctly offer elements"()
     {
         given:
+            FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
             mpmcQueueStats = createQueue(new ArrayBlockingQueue<Integer>(1))
         when:
             boolean firstElementPut = mpmcQueueStats.offer(1)
