@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
+import java.util.function.Function;
 
 @Builder
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
@@ -27,6 +28,8 @@ public class LogFileConfiguration
     Clock fileCycleClock;
     @Getter
     boolean disableCompression;
+    @Getter
+    Function<FileAccessContext, ProbeWriter> probeWriter;
 
     public Clock getFileCycleClock()
     {

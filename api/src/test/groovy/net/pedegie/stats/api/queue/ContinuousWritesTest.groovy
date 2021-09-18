@@ -39,7 +39,7 @@ class ContinuousWritesTest extends Specification
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
-            probes.getInt(probes.limit() - DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM) == elementsToFillWholeBuffer.length + 1
+            probes.getInt(probes.limit() - DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM) == elementsToFillWholeBuffer.length + 1
     }
 
     def "should be able to append to log file when whole mmaped memory is dirty"()
@@ -53,7 +53,7 @@ class ContinuousWritesTest extends Specification
 
             MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
 
-            def range = 1..(FileUtils.PAGE_SIZE / DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM)
+            def range = 1..(OS.pageSize() / DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM)
             range.forEach {
                 queue.add(it.intValue())
             }
@@ -62,14 +62,14 @@ class ContinuousWritesTest extends Specification
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
         then: "there are 2 probes"
-            probes.limit() == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * range.size()
+            probes.limit() == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * range.size()
         when:
             queue = TestQueueUtil.createQueue(logFileConfiguration)
             queue.add(5)
             queue.close()
             probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
         then: "there are 3 probes"
-            probes.limit() == DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM * (range.size() + 1)
+            probes.limit() == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * (range.size() + 1)
     }
 
     // it takes too long, run with integration tests nightly CI build
@@ -100,7 +100,7 @@ class ContinuousWritesTest extends Specification
 
     private static int[] allocate(LogFileConfiguration logFileConfiguration)
     {
-        int elements = (int) (logFileConfiguration.mmapSize / DefaultFileAccess.PROBE_AND_TIMESTAMP_BYTES_SUM)
+        int elements = (int) (logFileConfiguration.mmapSize / DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM)
         return new int[elements]
     }
 }

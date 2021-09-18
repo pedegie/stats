@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
+import net.openhft.chronicle.core.OS;
 
 import java.io.Closeable;
 import java.io.RandomAccessFile;
@@ -13,13 +14,16 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 
 @FieldDefaults(level = AccessLevel.PROTECTED, makeFinal = true)
-abstract class FileAccess implements Closeable
+class FileAccess implements Closeable
 {
-    private static final int MB_500 = 1024 * 1024 * 512;
-
     ReentrantLock resizeLock = new ReentrantLock();
+    ProbeWriter probeWriter;
+    @Getter
+    long startCycleMillis;
+
     @NonFinal
     RandomAccessFile fileAccess;
     @NonFinal
@@ -35,37 +39,33 @@ abstract class FileAccess implements Closeable
     @NonFinal
     long fileSize;
 
-    @SneakyThrows
-    FileAccess(Path filePath, int mmapSize)
+    FileAccess(Path filePath, int mmapSize, Function<FileAccessContext, ProbeWriter> probeWriterFactory, long startCycleMillis)
     {
         FileUtils.createFile(filePath);
         this.filePath = filePath;
-        this.mmapSize = mmapSize == 0 ? MB_500 : FileUtils.roundToPageSize(mmapSize);
-        mmap();
+        this.mmapSize = mmapSize;
+        this.startCycleMillis = startCycleMillis;
+        this.mappedFileBuffer = mmap(this.filePath, this.fileSize, this.mmapSize);
         this.bufferLimit = this.mappedFileBuffer.limit();
 
-        var firstFreeIndex = FileUtils.findFirstFreeIndex(mappedFileBuffer);
-        mappedFileBuffer.position(firstFreeIndex);
-        bufferOffset.set(firstFreeIndex);
+        var accessContext = new FileAccessContext(mappedFileBuffer, bufferOffset, filePath);
+        this.probeWriter = probeWriterFactory.apply(accessContext);
         PreToucher.preTouch(mappedFileBuffer);
+        OS.memory().storeFence();
     }
-
-    abstract int recordSize();
-
-    abstract void writeProbe(int offset, int probe, long timestamp);
 
     public void writeProbe(int probe, long timestamp)
     {
-        int offset = nextOffset();
-        int sumBytes = offset + recordSize();
-        if (sumBytes >= bufferLimit || sumBytes < 0)
+        int nextProbeOffset = nextOffset();
+        int offsetAfterWriting = nextProbeOffset + probeWriter.probeSize();
+        if (offsetAfterWriting >= bufferLimit || offsetAfterWriting < 0)
         {
             if (resizeLock.tryLock())
             {
                 try
                 {
                     resize();
-                    writeProbe(0, probe, timestamp);
+                    probeWriter.writeProbe(mappedFileBuffer, 0, probe, timestamp);
                 } finally
                 {
                     resizeLock.unlock();
@@ -74,30 +74,30 @@ abstract class FileAccess implements Closeable
             // drop probes during resize
         } else
         {
-            writeProbe(offset, probe, timestamp);
+            probeWriter.writeProbe(mappedFileBuffer, nextProbeOffset, probe, timestamp);
         }
     }
 
     private void resize()
     {
-        this.fileSize += bufferLimit - (bufferLimit % recordSize());
+        this.fileSize += bufferLimit - (bufferLimit % probeWriter.probeSize());
         close(fileSize);
-        mmap();
+        this.mappedFileBuffer = mmap(filePath, fileSize, mmapSize);
         PreToucher.preTouch(mappedFileBuffer);
-        this.bufferOffset.set(recordSize());
+        this.bufferOffset.set(probeWriter.probeSize());
     }
 
     @SneakyThrows
-    private void mmap()
+    private ByteBuffer mmap(Path filePath, long offset, int size)
     {
         this.fileAccess = new RandomAccessFile(filePath.toFile(), "rw");
         this.channel = fileAccess.getChannel();
-        this.mappedFileBuffer = channel.map(FileChannel.MapMode.READ_WRITE, fileSize, mmapSize);
+        return channel.map(FileChannel.MapMode.READ_WRITE, offset, size);
     }
 
     private int nextOffset()
     {
-        return bufferOffset.getAndAdd(recordSize());
+        return bufferOffset.getAndAdd(probeWriter.probeSize());
     }
 
     @Override
@@ -109,15 +109,34 @@ abstract class FileAccess implements Closeable
     @SneakyThrows
     private void close(long truncate)
     {
-        channel.truncate(truncate);
-        fileAccess.close();
-        boolean unmapOnClose = true; // todo
-        if (unmapOnClose)
+        resizeLock.lock();
+        try
         {
+            if(closed())
+            {
+                return;
+            }
+
+            channel.truncate(truncate);
+            fileAccess.close();
+
             fileAccess = null;
             mappedFileBuffer = null;
             channel = null;
-            System.gc();
+
+            boolean unmapOnClose = true; // todo
+            if (unmapOnClose)
+            {
+                System.gc();
+            }
+        } finally
+        {
+            resizeLock.unlock();
         }
+    }
+
+    private boolean closed()
+    {
+        return fileAccess == null;
     }
 }

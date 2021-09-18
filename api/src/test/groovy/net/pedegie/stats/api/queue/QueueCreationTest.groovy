@@ -69,7 +69,7 @@ class QueueCreationTest extends Specification
     def "should correctly find first free index in byte buffer"()
     {
         expect:
-            FileUtils.findFirstFreeIndex(buffer) == expectedFirstFreeIndex
+            FileUtils.findFirstFreeIndex(buffer, 4) == expectedFirstFreeIndex
         where:
             buffer                                               | expectedFirstFreeIndex
             wrap([0, 0, 0, 0, 0, 0, 0, 0, 0, 0] as byte[])       | 0

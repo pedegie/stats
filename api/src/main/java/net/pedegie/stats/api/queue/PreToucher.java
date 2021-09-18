@@ -6,11 +6,9 @@ import java.nio.ByteBuffer;
 
 class PreToucher
 {
-    private static final int PAGE_SIZE = OS.pageSize();
-
     public static void preTouch(ByteBuffer byteBuffer)
     {
-        for (int i = byteBuffer.position(); i < byteBuffer.limit() && i >= 0; i += PAGE_SIZE)
+        for (int i = byteBuffer.position(); i < byteBuffer.limit() && i >= 0; i += OS.pageSize())
         {
             byteBuffer.put(i, (byte) 0);
         }
