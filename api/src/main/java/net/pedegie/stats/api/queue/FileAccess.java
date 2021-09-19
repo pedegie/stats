@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
+import lombok.extern.slf4j.Slf4j;
 import net.openhft.chronicle.core.OS;
 
 import java.io.Closeable;
@@ -17,6 +18,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 @FieldDefaults(level = AccessLevel.PROTECTED, makeFinal = true)
+@Slf4j
 class FileAccess implements Closeable
 {
     ReentrantLock resizeLock = new ReentrantLock();
@@ -41,6 +43,7 @@ class FileAccess implements Closeable
 
     FileAccess(Path filePath, int mmapSize, Function<FileAccessContext, ProbeWriter> probeWriterFactory, long startCycleMillis)
     {
+        log.info("Creating {}", filePath.toString());
         FileUtils.createFile(filePath);
         this.filePath = filePath;
         this.mmapSize = mmapSize;
@@ -103,40 +106,53 @@ class FileAccess implements Closeable
     @Override
     public void close()
     {
-        close(fileSize + bufferOffset.get());
+        withinResizeLock(() -> close(fileSize + bufferOffset.get()));
     }
 
     @SneakyThrows
     private void close(long truncate)
     {
-        resizeLock.lock();
-        try
+        withinResizeLock(() -> close1(truncate));
+    }
+
+    @SneakyThrows
+    private void close1(long truncate)
+    {
+        if (closed())
         {
-            if(closed())
-            {
-                return;
-            }
+            return;
+        }
 
-            channel.truncate(truncate);
-            fileAccess.close();
+        channel.truncate(truncate);
+        fileAccess.close();
 
-            fileAccess = null;
-            mappedFileBuffer = null;
-            channel = null;
+        fileAccess = null;
+        mappedFileBuffer = null;
+        channel = null;
 
-            boolean unmapOnClose = true; // todo
-            if (unmapOnClose)
-            {
-                System.gc();
-            }
-        } finally
+        boolean unmapOnClose = true; // todo
+        if (unmapOnClose)
         {
-            resizeLock.unlock();
+            System.gc();
         }
     }
 
     private boolean closed()
     {
         return fileAccess == null;
+    }
+
+    private void withinResizeLock(Runnable action)
+    {
+        resizeLock.lock();
+        {
+            try
+            {
+                action.run();
+            } finally
+            {
+                resizeLock.unlock();
+            }
+        }
     }
 }

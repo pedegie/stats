@@ -12,7 +12,7 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.LinkedList;
 
-class FileUtils
+public class FileUtils
 {
     @SneakyThrows
     public static void createFile(Path path)
@@ -70,13 +70,13 @@ class FileUtils
         return !entries.hasNext();
     }
 
-    public static int roundToPageSize(int mmapSize)
+    static int roundToPageSize(int mmapSize)
     {
         int rounded = mmapSize + OS.pageSize() - 1 & (-OS.pageSize());
         return rounded < 0 ? Integer.MAX_VALUE : rounded;
     }
 
-    public static int findFirstFreeIndex(ByteBuffer buffer, int probeSize)
+    static int findFirstFreeIndex(ByteBuffer buffer, int probeSize)
     {
         if (isEmpty(buffer))
             return 0;

@@ -1,6 +1,7 @@
 package net.pedegie.stats.sb;
 
 import lombok.SneakyThrows;
+import net.pedegie.stats.api.queue.FileUtils;
 import net.pedegie.stats.api.queue.LogFileConfiguration;
 import net.pedegie.stats.api.queue.MPMCQueueStats;
 import net.pedegie.stats.sb.cli.ProgramArguments;
@@ -26,7 +27,7 @@ public class StatsBenchmark
     private static final int POISON_PILL = -1;
     private static final Logger log = LogManager.getLogger(StatsBenchmark.class);
 
-    private static final Path statsQueue = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
+    private static final Path statsQueue = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue", "stats_queue.log").toAbsolutePath();
     private static final Timeout BENCHMARK_TIMEOUT = new Timeout(TimeUnit.SECONDS, 120);
 
     public static void main(String[] args)
@@ -101,8 +102,11 @@ public class StatsBenchmark
         return benchmarkDuration;
     }
 
+    @SneakyThrows
     private static MPMCQueueStats<Integer> createStatsQueue()
     {
+        FileUtils.cleanDirectory(statsQueue.getParent());
+
         var logFileConfiguration = LogFileConfiguration.builder()
                 .path(statsQueue)
                 .mmapSize(Integer.MAX_VALUE)

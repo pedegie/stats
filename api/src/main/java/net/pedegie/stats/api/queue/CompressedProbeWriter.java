@@ -34,7 +34,7 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
             log.debug("Initialized new compressed file {}, starting at offset: {} with timestamp: {}", accessContext.getFileName(), 0, startCycleTimestamp);
         } else
         {
-            log.debug("Found dirty header: {}", Long.toHexString(timestamp));
+            log.debug("Found dirty header: 0x{}", Long.toHexString(timestamp));
 
             if ((timestamp & Long.MIN_VALUE) == 0)
             {
@@ -50,7 +50,7 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
             log.debug("Recover");
             var index = CrashRecovery.recover(accessContext, this);
             accessContext.seekTo(index);
-            log.debug("Found compressed file {}, appending to index: {}", accessContext.getFileName(), accessContext.getBuffer().position());
+            log.debug("Found compressed file {}, appending to index: {}", accessContext.getFileName(), index);
         }
         this.startCycleTimestamp = startCycleTimestamp;
 
@@ -64,6 +64,9 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
     @Override
     public void writeProbe(ByteBuffer buffer, int offset, int probe, long timestamp)
     {
+        if (probe == 0)
+            probe |= Integer.MIN_VALUE;
+
         var adjustedTimestamp = (int) (timestamp - startCycleTimestamp);
         buffer.putInt(offset, probe);
         buffer.putInt(offset + PROBE_SIZE, adjustedTimestamp);

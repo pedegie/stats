@@ -31,6 +31,9 @@ class DefaultProbeWriter implements ProbeWriter, Recoverable
     @Override
     public void writeProbe(ByteBuffer buffer, int offset, int probe, long timestamp)
     {
+        if (probe == 0)
+            probe |= Integer.MIN_VALUE;
+
         buffer.putInt(offset, probe);
         buffer.putLong(offset + PROBE_SIZE, timestamp);
     }

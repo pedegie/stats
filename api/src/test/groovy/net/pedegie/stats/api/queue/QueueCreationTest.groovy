@@ -81,6 +81,40 @@ class QueueCreationTest extends Specification
             wrap([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1] as byte[]) | 12 // full
     }
 
+    def "should differentiate probe which's value is 0 from free/sparse space during appending to already existing file"()
+    {
+        given: "queue"
+            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .disableCompression(compressionDisabled)
+                    .build()
+            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+        when: "we put first element and then remove from queue"
+            queue.add(5)
+            queue.remove()
+            queue.close()
+        then: "there should be 2 elements"
+            Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
+            ByteBuffer logFileBuffer = ByteBuffer.wrap(Files.readAllBytes(logFile))
+            logFileBuffer.limit() == expectedBytesAfterWritingTwoElements
+        and: "second probe value instead of 0 has first bit set indicating its zero"
+            logFileBuffer.getInt(secondProbeValueIndex) == Integer.MIN_VALUE
+        when: "we create queue again and put there one element"
+            queue = TestQueueUtil.createQueue(logFileConfiguration)
+            queue.add(5)
+            queue.close()
+        then: "it should have 3 elements"
+            Path logFile2 = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
+            ByteBuffer logFileBuffer2 = ByteBuffer.wrap(Files.readAllBytes(logFile2))
+            logFileBuffer2.limit() == expectedBytesAfterWritingThreelements
+        where:
+            compressionDisabled << [true, false]
+            expectedBytesAfterWritingTwoElements << [24, 24]
+            expectedBytesAfterWritingThreelements << [36, 32]
+            secondProbeValueIndex << [12, 16]
+
+    }
+
     private static ByteBuffer wrap(byte[] bytes)
     {
         return ByteBuffer.wrap(bytes)

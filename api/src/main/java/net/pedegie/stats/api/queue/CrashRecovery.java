@@ -36,13 +36,21 @@ class CrashRecovery
     private static boolean needRecovery(ByteBuffer buffer, Recoverable recoverable)
     {
         var index = FileUtils.findFirstFreeIndex(buffer, MAGIC_NUMBER);
+        var bufferLimitTheSameAsIndex = index == buffer.limit();
         buffer.limit(index);
 
         if (bufferNotContainsEvenSingleProbe(buffer, recoverable) || itsNotDivisibleByProbeSize(buffer, recoverable))
         {
             return true;
         }
-        return !recoverable.correctProbeOnCurrentPosition(buffer);
+        var needRecovery = !recoverable.correctProbeOnCurrentPosition(buffer);
+
+        if (needRecovery && bufferLimitTheSameAsIndex)
+        {
+            throw new IllegalStateException("Infinity loop");
+        }
+
+        return needRecovery;
     }
 
     private static boolean bufferNotContainsEvenSingleProbe(ByteBuffer buffer, Recoverable recoverable)
