@@ -1,8 +1,8 @@
 package net.pedegie.stats.jmh;
 
 import lombok.SneakyThrows;
-import net.pedegie.stats.api.queue.LogFileConfiguration;
-import net.pedegie.stats.api.queue.MPMCQueueStats;
+import net.pedegie.stats.api.queue.FileUtils;
+import net.pedegie.stats.api.queue.StatsQueue;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -25,12 +25,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /*
-Benchmark                                                       Mode  Cnt  Score   Error  Units
-QueueStatsVsLinkedList.TestBenchmark3.LinkedList                avgt    5  0.776 ± 0.015  ms/op
-QueueStatsVsLinkedList.TestBenchmark3.MPMCQueueStatsLinkedList  avgt    5  4.399 ± 0.209  ms/op
+Benchmark                                                                          Mode  Cnt  Score   Error  Units
+QueueStatsVsLinkedList.TestBenchmark3.LinkedList                                   avgt    5  0.783 ± 0.017  ms/op
+QueueStatsVsLinkedList.TestBenchmark3.StatsQueueDisabledSynchronizationLinkedList  avgt    5  5.158 ± 1.283  ms/op
+QueueStatsVsLinkedList.TestBenchmark3.StatsQueueLinkedList                         avgt    5  5.524 ± 1.574  ms/op
 */
 
 public class QueueStatsVsLinkedList
@@ -53,9 +55,15 @@ public class QueueStatsVsLinkedList
         }
 
         @Benchmark
-        public void MPMCQueueStatsLinkedList(Blackhole blackhole, QueueConfiguration queueConfiguration)
+        public void StatsQueueLinkedList(Blackhole blackhole, QueueConfiguration queueConfiguration)
         {
-            runBenchmark(queueConfiguration.mpmcQueueStatsLinkedList, blackhole);
+            runBenchmark(queueConfiguration.statsQueueLinkedList, blackhole);
+        }
+
+        @Benchmark
+        public void StatsQueueDisabledSynchronizationLinkedList(Blackhole blackhole, QueueConfiguration queueConfiguration)
+        {
+            runBenchmark(queueConfiguration.statsQueueDisabledSynchronizationLinkedList, blackhole);
         }
 
         private static void runBenchmark(Queue<Integer> queue, Blackhole blackhole)
@@ -83,23 +91,36 @@ public class QueueStatsVsLinkedList
         @State(Scope.Benchmark)
         public static class QueueConfiguration
         {
-            private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
+            private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue", "stats_queue.log").toAbsolutePath();
 
-            MPMCQueueStats<Integer> mpmcQueueStatsLinkedList;
+            StatsQueue<Integer> statsQueueLinkedList;
+            StatsQueue<Integer> statsQueueDisabledSynchronizationLinkedList;
             LinkedList<Integer> linkedList;
 
             @Setup(Level.Trial)
             @SneakyThrows
             public void setUp()
             {
-                var logFileConfiguration = LogFileConfiguration.builder()
-                        .path(testQueuePath)
+                FileUtils.cleanDirectory(testQueuePath.getParent());
+
+                var queueConfiguration = net.pedegie.stats.api.queue.QueueConfiguration.builder()
+                        .path(testQueuePath.getParent().resolve(Paths.get(testQueuePath.getFileName() + UUID.randomUUID().toString())))
+                        .mmapSize(Integer.MAX_VALUE)
+                        .build();
+                statsQueueLinkedList = StatsQueue.<Integer>builder()
+                        .queue(new LinkedList<>())
+                        .queueConfiguration(queueConfiguration)
+                        .build();
+
+                var queueConfigurationDisabledSync = net.pedegie.stats.api.queue.QueueConfiguration.builder()
+                        .path(testQueuePath.getParent().resolve(Paths.get(testQueuePath.getFileName() + UUID.randomUUID().toString())))
+                        .disableSynchronization(true)
                         .mmapSize(Integer.MAX_VALUE)
                         .build();
 
-                mpmcQueueStatsLinkedList = MPMCQueueStats.<Integer>builder()
+                statsQueueDisabledSynchronizationLinkedList = StatsQueue.<Integer>builder()
                         .queue(new LinkedList<>())
-                        .logFileConfiguration(logFileConfiguration)
+                        .queueConfiguration(queueConfigurationDisabledSync)
                         .build();
 
                 linkedList = new LinkedList<>();

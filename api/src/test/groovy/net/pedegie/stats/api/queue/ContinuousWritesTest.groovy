@@ -23,14 +23,14 @@ class ContinuousWritesTest extends Specification
     def "should continuously allocate mmap files"()
     {
         given:
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .mmapSize(OS.pageSize())
                     .path(TestQueueUtil.PATH)
                     .disableCompression(true)
                     .build()
 
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
-            int[] elementsToFillWholeBuffer = allocate(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
+            int[] elementsToFillWholeBuffer = allocate(queueConfiguration)
 
         when:
             elementsToFillWholeBuffer.each { queue.add(it) }
@@ -45,13 +45,13 @@ class ContinuousWritesTest extends Specification
     def "should be able to append to log file when whole mmaped memory is dirty"()
     {
         given:
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .disableCompression(true)
                     .build()
 
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
 
             def range = 1..(OS.pageSize() / DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM)
             range.forEach {
@@ -64,7 +64,7 @@ class ContinuousWritesTest extends Specification
         then: "there are 2 probes"
             probes.limit() == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * range.size()
         when:
-            queue = TestQueueUtil.createQueue(logFileConfiguration)
+            queue = TestQueueUtil.createQueue(queueConfiguration)
             queue.add(5)
             queue.close()
             probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
@@ -77,15 +77,15 @@ class ContinuousWritesTest extends Specification
     def "should be able to mmap more memory than 2GB"()
     {
         given:
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .mmapSize(Integer.MAX_VALUE)
                     .disableCompression(true)
                     .path(TestQueueUtil.PATH)
                     .build()
 
-            MPMCQueueStats queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue queue = TestQueueUtil.createQueue(queueConfiguration)
 
-            int[] elementsToFillWholeBuffer = allocate(logFileConfiguration)
+            int[] elementsToFillWholeBuffer = allocate(queueConfiguration)
             for (int i = 0; i < elementsToFillWholeBuffer.length; i++)
             {
                 queue.add(elementsToFillWholeBuffer[i])
@@ -98,9 +98,9 @@ class ContinuousWritesTest extends Specification
             noExceptionThrown()
     }
 
-    private static int[] allocate(LogFileConfiguration logFileConfiguration)
+    private static int[] allocate(QueueConfiguration queueConfiguration)
     {
-        int elements = (int) (logFileConfiguration.mmapSize / DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM)
+        int elements = (int) (queueConfiguration.mmapSize / DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM)
         return new int[elements]
     }
 }

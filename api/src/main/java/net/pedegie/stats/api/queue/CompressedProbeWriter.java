@@ -49,7 +49,7 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
 
             log.debug("Recover");
             var index = CrashRecovery.recover(accessContext, this);
-            accessContext.seekTo(index);
+            accessContext.seekTo(Math.max(index, HEADER_SIZE));
             log.debug("Found compressed file {}, appending to index: {}", accessContext.getFileName(), index);
         }
         this.startCycleTimestamp = startCycleTimestamp;
@@ -85,7 +85,7 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
     }
 
     @Override
-    public boolean correctProbeOnCurrentPosition(ByteBuffer buffer)
+    public boolean correctProbeOnLastPosition(ByteBuffer buffer)
     {
         var previousTimestampIsPresent = buffer.getInt(buffer.limit() - TIMESTAMP_SIZE) != 0;
         var previousProbeIsPresent = buffer.getInt(buffer.limit() - (PROBE_AND_TIMESTAMP_BYTES_SUM)) != 0;

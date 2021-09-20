@@ -7,7 +7,6 @@ import lombok.experimental.FieldDefaults;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @Getter
@@ -15,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 class FileAccessContext
 {
     ByteBuffer buffer;
-    AtomicInteger bufferOffset;
+    Counter bufferOffset;
     Path fileName;
 
     void seekTo(int offset)

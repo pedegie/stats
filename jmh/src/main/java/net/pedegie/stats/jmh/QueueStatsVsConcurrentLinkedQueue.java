@@ -1,7 +1,7 @@
 package net.pedegie.stats.jmh;
 
-import net.pedegie.stats.api.queue.LogFileConfiguration;
-import net.pedegie.stats.api.queue.MPMCQueueStats;
+import net.pedegie.stats.api.queue.FileUtils;
+import net.pedegie.stats.api.queue.StatsQueue;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -22,6 +22,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -29,23 +30,26 @@ import java.util.function.Supplier;
 import static net.pedegie.stats.jmh.Benchmark.runBenchmarkForQueue;
 
 /*
-Benchmark                                                                            (threads)  Mode  Cnt     Score      Error  Units
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                        1  avgt    3     6.643 ±    1.001  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                        2  avgt    3    24.140 ±   26.591  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                        4  avgt    3    37.187 ±   79.630  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                        8  avgt    3   109.204 ±  584.272  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                       16  avgt    3   352.127 ±  349.541  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                       32  avgt    3   652.617 ± 2484.780  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                       64  avgt    3  1442.987 ± 1378.706  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                      128  avgt    3  2909.990 ± 3230.944  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue          1  avgt    3    17.692 ±   21.788  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue          2  avgt    3    39.007 ±   14.640  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue          4  avgt    3    74.890 ±   85.103  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue          8  avgt    3   189.647 ±   65.109  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue         16  avgt    3   415.680 ±   53.561  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue         32  avgt    3   822.984 ±  690.411  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue         64  avgt    3  1774.190 ±  201.418  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.MPMCQueueStatsConcurrentLinkedQueue        128  avgt    3  4035.729 ± 2351.217  ms/op
+Benchmark                                                                        (threads)  Mode  Cnt     Score      Error  Units
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    1  avgt    4     5.895 ±    0.494  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    2  avgt    4    21.882 ±   14.012  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    4  avgt    4    34.899 ±    1.647  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    8  avgt    4   159.042 ±    5.050  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                   16  avgt    4   388.343 ±  106.886  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                   32  avgt    4   790.953 ±  216.111  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                   64  avgt    4  1676.783 ±  335.230  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                  128  avgt    4  2287.866 ±   85.530  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue          1  avgt    4    14.575 ±    5.231  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue          2  avgt    4    36.946 ±    1.668  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue          4  avgt    4    73.907 ±    4.084  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue          8  avgt    4   190.110 ±   69.062  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue         16  avgt    4   414.898 ±  181.509  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue         32  avgt    4   870.168 ±  371.649  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue         64  avgt    4  1808.156 ±  563.902  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue        128  avgt    4  3853.431 ± 1105.405  ms/op
+
+Process finished with exit code 0
+
 */
 
 
@@ -61,9 +65,9 @@ public class QueueStatsVsConcurrentLinkedQueue
     public static class TestBenchmark
     {
         @Benchmark
-        public void MPMCQueueStatsConcurrentLinkedQueue(QueueConfiguration queueConfiguration)
+        public void StatsQueueConcurrentLinkedQueue(QueueConfiguration queueConfiguration)
         {
-            queueConfiguration.mpmcQueueStatsConcurrentLinkedQueueBenchmark.get();
+            queueConfiguration.statsQueueConcurrentLinkedQueueBenchmark.get();
         }
 
         @Benchmark
@@ -75,27 +79,29 @@ public class QueueStatsVsConcurrentLinkedQueue
         @State(Scope.Benchmark)
         public static class QueueConfiguration
         {
-            private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
+            private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue", "stats_queue.log").toAbsolutePath();
 
             @Param({"1", "2", "4", "8", "16", "32", "64", "128"})
             public int threads;
 
-            Supplier<Void> mpmcQueueStatsConcurrentLinkedQueueBenchmark;
+            Supplier<Void> statsQueueConcurrentLinkedQueueBenchmark;
             Supplier<Void> concurrentLinkedQueueBenchmark;
 
             @Setup(Level.Trial)
             public void setUp()
             {
-                var logFileConfiguration = LogFileConfiguration.builder()
-                        .path(testQueuePath)
+                FileUtils.cleanDirectory(testQueuePath.getParent());
+
+                var queueConfiguration = net.pedegie.stats.api.queue.QueueConfiguration.builder()
+                        .path(testQueuePath.getParent().resolve(Paths.get(testQueuePath.getFileName() + UUID.randomUUID().toString())))
                         .mmapSize(Integer.MAX_VALUE)
                         .build();
 
-                MPMCQueueStats<Integer> mpmcQueueStatsConcurrentLinkedQueue = MPMCQueueStats.<Integer>builder()
+                StatsQueue<Integer> queue = StatsQueue.<Integer>builder()
                         .queue(new ConcurrentLinkedQueue<>())
-                        .logFileConfiguration(logFileConfiguration)
+                        .queueConfiguration(queueConfiguration)
                         .build();
-                mpmcQueueStatsConcurrentLinkedQueueBenchmark = runBenchmarkForQueue(mpmcQueueStatsConcurrentLinkedQueue, threads);
+                statsQueueConcurrentLinkedQueueBenchmark = runBenchmarkForQueue(queue, threads);
                 concurrentLinkedQueueBenchmark = runBenchmarkForQueue(new ConcurrentLinkedQueue<>(), threads);
             }
         }

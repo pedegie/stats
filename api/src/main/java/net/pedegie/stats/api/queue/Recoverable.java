@@ -8,5 +8,5 @@ interface Recoverable
 
     int headerSize();
 
-    boolean correctProbeOnCurrentPosition(ByteBuffer buffer);
+    boolean correctProbeOnLastPosition(ByteBuffer buffer);
 }

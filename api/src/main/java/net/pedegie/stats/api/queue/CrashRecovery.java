@@ -30,7 +30,7 @@ class CrashRecovery
         }
         var index = buffer.limit();
         buffer.limit(limitMark);
-        return Math.max(index, recoverable.headerSize());
+        return index;
     }
 
     private static boolean needRecovery(ByteBuffer buffer, Recoverable recoverable)
@@ -43,7 +43,7 @@ class CrashRecovery
         {
             return true;
         }
-        var needRecovery = !recoverable.correctProbeOnCurrentPosition(buffer);
+        var needRecovery = !recoverable.correctProbeOnLastPosition(buffer);
 
         if (needRecovery && bufferLimitTheSameAsIndex)
         {

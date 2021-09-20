@@ -29,13 +29,13 @@ class RecyclerTest extends Specification
     {
         given:
             ZonedDateTime now = ZonedDateTime.of(LocalDateTime.parse(time), ZoneId.of("UTC"))
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration
+            QueueConfiguration queueConfiguration = QueueConfiguration
                     .builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(fileCycleDuration)
                     .fileCycleClock(Clock.fixed(now.toInstant(), ZoneId.of("UTC")))
                     .build()
-            TestQueueUtil.createQueue(logFileConfiguration).close()
+            TestQueueUtil.createQueue(queueConfiguration).close()
         expect:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Path expectedLogFileName = PathDateFormatter.appendDate(TestQueueUtil.PATH, ZonedDateTime.of(LocalDateTime.parse(expectedDateAppendedToLogFile), ZoneId.of("UTC")))
@@ -81,14 +81,14 @@ class RecyclerTest extends Specification
     {
         given: "create queue with one minute file cycle"
             ZonedDateTime time = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:00:00"), ZoneId.of("UTC"))
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration
+            QueueConfiguration queueConfiguration = QueueConfiguration
                     .builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
                     .disableCompression(true)
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put 2 elements to queue"
             queue.add(5)
             queue.add(5)
@@ -98,14 +98,14 @@ class RecyclerTest extends Specification
             Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 2
         when: "we create new queue with timestamp that matches to previous 00:00:00 one-minute window"
             time = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:00:30"), ZoneId.of("UTC"))
-            logFileConfiguration = LogFileConfiguration
+            queueConfiguration = QueueConfiguration
                     .builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
                     .disableCompression(true)
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
                     .build()
-            queue = TestQueueUtil.createQueue(logFileConfiguration)
+            queue = TestQueueUtil.createQueue(queueConfiguration)
         and: "we put 3rd element"
             queue.add(5)
             queue.close()
@@ -118,14 +118,14 @@ class RecyclerTest extends Specification
     {
         given: "create queue with one minute file cycle"
             ZonedDateTime time = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:00:00"), ZoneId.of("UTC"))
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration
+            QueueConfiguration queueConfiguration = QueueConfiguration
                     .builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
                     .disableCompression(true)
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put 2 elements to queue"
             queue.add(5)
             queue.add(5)

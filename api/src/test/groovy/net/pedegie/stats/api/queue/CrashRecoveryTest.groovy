@@ -29,14 +29,14 @@ class CrashRecoveryTest extends Specification
     def "should recover from crash when it happens between non-atomic probe write and timestamp - it should truncate to last correct probe and start from there"()
     {
         given: "Crashing probe writer"
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .probeWriter(crashingProbeWriter)
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .disableCompression(true)
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put elements"
             (0..(crashOnElement)).forEach { queue.add(5) }
         then: "there are probes in file but last one is missing timestamp"
@@ -47,14 +47,14 @@ class CrashRecoveryTest extends Specification
             Arrays.fill(expectedEmptyBytes, 0 as byte)
             Arrays.copyOfRange(bytes, bytes.length - 4, bytes.length) == expectedEmptyBytes
         when: "we create queue one more time, with normal (non-crashing) probe writer"
-            logFileConfiguration = LogFileConfiguration.builder()
+            queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .probeWriter(probeWriter)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
                     .disableCompression(true)
                     .build()
-            queue = TestQueueUtil.createQueue(logFileConfiguration)
+            queue = TestQueueUtil.createQueue(queueConfiguration)
         and: "we put there one element"
             queue.add(5)
             queue.close()
@@ -77,14 +77,14 @@ class CrashRecoveryTest extends Specification
     def "should recover from crash when it happens before any writes - it should truncate to beginning of buffer"()
     {
         given: "Crashing probe writer"
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .probeWriter(crashingProbeWriter)
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .disableCompression(true)
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we try to put first element"
             queue.add(5)
         then: "there is one empty probe"
@@ -92,14 +92,14 @@ class CrashRecoveryTest extends Specification
             byte[] bytes = Files.readAllBytes(logFile)
             bytes.length == expectedBytes
         when: "we create queue one more time, with normal (non-crashing) probe writer"
-            logFileConfiguration = LogFileConfiguration.builder()
+            queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .probeWriter(probeWriter)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
                     .disableCompression(true)
                     .build()
-            queue = TestQueueUtil.createQueue(logFileConfiguration)
+            queue = TestQueueUtil.createQueue(queueConfiguration)
         and: "we put there one element"
             queue.add(5)
             queue.close()

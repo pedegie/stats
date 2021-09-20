@@ -35,11 +35,11 @@ class TestQueueUtil
         }).collect { it.toPath() }
     }
 
-    static MPMCQueueStats<Integer> createQueue(LogFileConfiguration logFileConfiguration)
+    static StatsQueue<Integer> createQueue(QueueConfiguration queueConfiguration)
     {
-        MPMCQueueStats.<Integer> builder()
+        StatsQueue.<Integer> builder()
                 .queue(new ConcurrentLinkedQueue<Integer>())
-                .logFileConfiguration(logFileConfiguration)
+                .queueConfiguration(queueConfiguration)
                 .build()
     }
 }

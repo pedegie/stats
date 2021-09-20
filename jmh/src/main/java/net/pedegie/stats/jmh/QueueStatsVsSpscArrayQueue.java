@@ -1,7 +1,7 @@
 package net.pedegie.stats.jmh;
 
-import net.pedegie.stats.api.queue.LogFileConfiguration;
-import net.pedegie.stats.api.queue.MPMCQueueStats;
+import net.pedegie.stats.api.queue.FileUtils;
+import net.pedegie.stats.api.queue.StatsQueue;
 import org.jctools.queues.SpscArrayQueue;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -22,15 +22,16 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static net.pedegie.stats.jmh.Benchmark.runBenchmarkForQueue;
 
 /*
-Benchmark                                                               Mode  Cnt   Score   Error  Units
-QueueStatsVsSpscArrayQueue.TestBenchmark2.MPMCQueueStatsSpscArrayQueue  avgt    3  13.358 ± 7.664  ms/op
-QueueStatsVsSpscArrayQueue.TestBenchmark2.spscArrayQueue                avgt    3   2.330 ± 0.417  ms/op
+Benchmark                                                           Mode  Cnt   Score   Error  Units
+QueueStatsVsSpscArrayQueue.TestBenchmark2.StatsQueueSpscArrayQueue  avgt    4  11.598 ± 7.451  ms/op
+QueueStatsVsSpscArrayQueue.TestBenchmark2.spscArrayQueue            avgt    4   2.082 ± 0.361  ms/op
 */
 
 public class QueueStatsVsSpscArrayQueue
@@ -52,32 +53,34 @@ public class QueueStatsVsSpscArrayQueue
         }
 
         @Benchmark
-        public void MPMCQueueStatsSpscArrayQueue(QueueConfiguration queueConfiguration)
+        public void StatsQueueSpscArrayQueue(QueueConfiguration queueConfiguration)
         {
-            queueConfiguration.mpmcQueueStatsSpscArrayQueueBenchmark.get();
+            queueConfiguration.statsQueueSpscArrayQueueBenchmark.get();
         }
 
         @State(Scope.Benchmark)
         public static class QueueConfiguration
         {
-            private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue").toAbsolutePath();
+            private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue", "stats_queue.log").toAbsolutePath();
 
-            Supplier<Void> mpmcQueueStatsSpscArrayQueueBenchmark;
+            Supplier<Void> statsQueueSpscArrayQueueBenchmark;
             Supplier<Void> spscArrayQueueBenchmark;
 
             @Setup(Level.Trial)
             public void setUp()
             {
-                var logFileConfiguration = LogFileConfiguration.builder()
-                        .path(testQueuePath)
+                FileUtils.cleanDirectory(testQueuePath.getParent());
+
+                var queueConfiguration = net.pedegie.stats.api.queue.QueueConfiguration.builder()
+                        .path(testQueuePath.getParent().resolve(Paths.get(testQueuePath.getFileName() + UUID.randomUUID().toString())))
                         .mmapSize(Integer.MAX_VALUE)
                         .build();
 
-                MPMCQueueStats<Integer> mpmcQueueStatsSpscArrayQueue = MPMCQueueStats.<Integer>builder()
+                StatsQueue<Integer> queue = StatsQueue.<Integer>builder()
                         .queue(new SpscArrayQueue<>(50000))
-                        .logFileConfiguration(logFileConfiguration)
+                        .queueConfiguration(queueConfiguration)
                         .build();
-                mpmcQueueStatsSpscArrayQueueBenchmark = runBenchmarkForQueue(mpmcQueueStatsSpscArrayQueue, 1);
+                statsQueueSpscArrayQueueBenchmark = runBenchmarkForQueue(queue, 1);
                 spscArrayQueueBenchmark = runBenchmarkForQueue(new SpscArrayQueue<>(50000), 1);
 
             }

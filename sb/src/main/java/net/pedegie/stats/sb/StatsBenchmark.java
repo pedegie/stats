@@ -2,8 +2,8 @@ package net.pedegie.stats.sb;
 
 import lombok.SneakyThrows;
 import net.pedegie.stats.api.queue.FileUtils;
-import net.pedegie.stats.api.queue.LogFileConfiguration;
-import net.pedegie.stats.api.queue.MPMCQueueStats;
+import net.pedegie.stats.api.queue.QueueConfiguration;
+import net.pedegie.stats.api.queue.StatsQueue;
 import net.pedegie.stats.sb.cli.ProgramArguments;
 import net.pedegie.stats.sb.timeout.Timeout;
 import org.apache.logging.log4j.LogManager;
@@ -84,9 +84,9 @@ public class StatsBenchmark
         CompletableFuture.allOf(futures).get(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
         var benchmarkDuration = System.nanoTime() - startTimestamp;
 
-        if (queue instanceof MPMCQueueStats)
+        if (queue instanceof StatsQueue)
         {
-            ((MPMCQueueStats) queue).close();
+            ((StatsQueue) queue).close();
         }
 
         producerPool.shutdown();
@@ -103,18 +103,18 @@ public class StatsBenchmark
     }
 
     @SneakyThrows
-    private static MPMCQueueStats<Integer> createStatsQueue()
+    private static StatsQueue<Integer> createStatsQueue()
     {
         FileUtils.cleanDirectory(statsQueue.getParent());
 
-        var logFileConfiguration = LogFileConfiguration.builder()
+        var queueConfiguration = QueueConfiguration.builder()
                 .path(statsQueue)
                 .mmapSize(Integer.MAX_VALUE)
                 .build();
 
-        return MPMCQueueStats.<Integer>builder()
+        return StatsQueue.<Integer>builder()
                 .queue(new ConcurrentLinkedQueue<>())
-                .logFileConfiguration(logFileConfiguration)
+                .queueConfiguration(queueConfiguration)
                 .build();
     }
 

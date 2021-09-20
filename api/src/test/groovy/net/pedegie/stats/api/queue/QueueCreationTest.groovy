@@ -26,12 +26,12 @@ class QueueCreationTest extends Specification
     {
         given:
             Path nestedFilePath = Paths.get(System.getProperty("java.io.tmpdir"), "dir1", "dir2", "stats_queue.log")
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(nestedFilePath)
                     .build()
             FileUtils.cleanDirectory(nestedFilePath.getParent())
         when:
-            MPMCQueueStats queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue queue = TestQueueUtil.createQueue(queueConfiguration)
         then:
             Files.newDirectoryStream(nestedFilePath.getParent())
                     .find { it.toAbsolutePath().toString().contains("stats_queue") } != null
@@ -43,12 +43,12 @@ class QueueCreationTest extends Specification
     def "should throw an exception if mmap size is less than page size"()
     {
         given:
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize() - 1)
                     .build()
         when:
-            TestQueueUtil.createQueue(logFileConfiguration)
+            TestQueueUtil.createQueue(queueConfiguration)
         then:
             thrown(IllegalArgumentException)
     }
@@ -56,12 +56,12 @@ class QueueCreationTest extends Specification
     def "should throw an exception if file cycle duration is less than 1 minute"()
     {
         given:
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(59, ChronoUnit.SECONDS))
                     .build()
         when:
-            TestQueueUtil.createQueue(logFileConfiguration)
+            TestQueueUtil.createQueue(queueConfiguration)
         then:
             thrown(IllegalArgumentException)
     }
@@ -84,11 +84,11 @@ class QueueCreationTest extends Specification
     def "should differentiate probe which's value is 0 from free/sparse space during appending to already existing file"()
     {
         given: "queue"
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .disableCompression(compressionDisabled)
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put first element and then remove from queue"
             queue.add(5)
             queue.remove()
@@ -100,7 +100,7 @@ class QueueCreationTest extends Specification
         and: "second probe value instead of 0 has first bit set indicating its zero"
             logFileBuffer.getInt(secondProbeValueIndex) == Integer.MIN_VALUE
         when: "we create queue again and put there one element"
-            queue = TestQueueUtil.createQueue(logFileConfiguration)
+            queue = TestQueueUtil.createQueue(queueConfiguration)
             queue.add(5)
             queue.close()
         then: "it should have 3 elements"
