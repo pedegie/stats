@@ -51,7 +51,7 @@ class DefaultProbeWriter implements ProbeWriter, Recoverable
     }
 
     @Override
-    public boolean correctProbeOnCurrentPosition(ByteBuffer buffer)
+    public boolean correctProbeOnLastPosition(ByteBuffer buffer)
     {
         var previousTimestampIsPresent = buffer.getLong(buffer.limit() - TIMESTAMP_SIZE) != 0;
         var previousProbeIsPresent = buffer.getInt(buffer.limit() - (PROBE_AND_TIMESTAMP_BYTES_SUM)) != 0;

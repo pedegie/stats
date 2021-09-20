@@ -21,13 +21,13 @@ class CrashQueueTest extends Specification
     def "should disable writing to file when queue crash"()
     {
         given: "Crashing probe write"
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .probeWriter(new CrashingProbes.DefaultCrashingProbeWriter(1))
                     .disableCompression(true)
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we add 2 elements"
             queue.add(5)
             queue.add(5)

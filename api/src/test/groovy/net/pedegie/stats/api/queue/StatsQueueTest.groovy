@@ -6,14 +6,14 @@ import spock.lang.Specification
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentLinkedQueue
 
-class MPMCQueueStatsTest extends Specification
+class StatsQueueTest extends Specification
 {
-    private MPMCQueueStats<Integer> mpmcQueueStats
+    private StatsQueue<Integer> statsQueue
 
     def setup()
     {
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
-        mpmcQueueStats = createQueue(new ConcurrentLinkedQueue<Integer>())
+        statsQueue = createQueue(new ConcurrentLinkedQueue<Integer>())
     }
 
     def cleanupSpec()
@@ -27,22 +27,22 @@ class MPMCQueueStatsTest extends Specification
             int element1 = 25
             int element2 = 10
         when:
-            mpmcQueueStats.add(element1)
-            mpmcQueueStats.add(element2)
+            statsQueue.add(element1)
+            statsQueue.add(element2)
         then:
-            mpmcQueueStats.contains(element1)
-            mpmcQueueStats.contains(element2)
-            mpmcQueueStats.size() == 2
+            statsQueue.contains(element1)
+            statsQueue.contains(element2)
+            statsQueue.size() == 2
     }
 
     def "should throw an error on add if queue is full"()
     {
         given:
             FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
-            mpmcQueueStats = createQueue(new ArrayBlockingQueue<Integer>(1))
+            statsQueue = createQueue(new ArrayBlockingQueue<Integer>(1))
         when:
-            mpmcQueueStats.add(1)
-            mpmcQueueStats.add(2)
+            statsQueue.add(1)
+            statsQueue.add(2)
         then:
             thrown(IllegalStateException)
     }
@@ -53,11 +53,11 @@ class MPMCQueueStatsTest extends Specification
             int element1 = 25
             int element2 = 10
         when:
-            mpmcQueueStats.addAll([element1, element2])
+            statsQueue.addAll([element1, element2])
         then:
-            mpmcQueueStats.contains(element1)
-            mpmcQueueStats.contains(element2)
-            mpmcQueueStats.size() == 2
+            statsQueue.contains(element1)
+            statsQueue.contains(element2)
+            statsQueue.size() == 2
     }
 
     def "should correctly return size"()
@@ -70,36 +70,36 @@ class MPMCQueueStatsTest extends Specification
             threads.forEach { it.start() }
             threads.forEach { it.join() }
         then:
-            mpmcQueueStats.size() == 10000
+            statsQueue.size() == 10000
     }
 
     def "should correctly return isEmpty"()
     {
         expect:
-            mpmcQueueStats.isEmpty()
+            statsQueue.isEmpty()
         when:
-            mpmcQueueStats.add(5)
+            statsQueue.add(5)
         then:
-            !mpmcQueueStats.isEmpty()
+            !statsQueue.isEmpty()
         when:
-            mpmcQueueStats.clear()
+            statsQueue.clear()
         then:
-            mpmcQueueStats.isEmpty()
+            statsQueue.isEmpty()
     }
 
     def "should correctly remove elements"()
     {
         given:
-            mpmcQueueStats.addAll([1, 2, 5])
+            statsQueue.addAll([1, 2, 5])
         when:
-            mpmcQueueStats.remove(1)
-            mpmcQueueStats.remove(5)
+            statsQueue.remove(1)
+            statsQueue.remove(5)
         then:
-            mpmcQueueStats.contains(2)
-            mpmcQueueStats.size() == 1
+            statsQueue.contains(2)
+            statsQueue.size() == 1
         when:
-            mpmcQueueStats.clear()
-            mpmcQueueStats.remove()
+            statsQueue.clear()
+            statsQueue.remove()
         then:
             thrown(NoSuchElementException)
     }
@@ -107,16 +107,16 @@ class MPMCQueueStatsTest extends Specification
     def "should correctly poll elements"()
     {
         given:
-            mpmcQueueStats.addAll([1, 2, 5])
+            statsQueue.addAll([1, 2, 5])
         when:
-            mpmcQueueStats.poll()
-            mpmcQueueStats.poll()
+            statsQueue.poll()
+            statsQueue.poll()
         then:
-            mpmcQueueStats.contains(5)
-            mpmcQueueStats.size() == 1
+            statsQueue.contains(5)
+            statsQueue.size() == 1
         when:
-            mpmcQueueStats.clear()
-            Integer element = mpmcQueueStats.poll()
+            statsQueue.clear()
+            Integer element = statsQueue.poll()
         then:
             element == null
     }
@@ -125,10 +125,10 @@ class MPMCQueueStatsTest extends Specification
     {
         given:
             FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
-            mpmcQueueStats = createQueue(new ArrayBlockingQueue<Integer>(1))
+            statsQueue = createQueue(new ArrayBlockingQueue<Integer>(1))
         when:
-            boolean firstElementPut = mpmcQueueStats.offer(1)
-            boolean secondElementPut = mpmcQueueStats.offer(2)
+            boolean firstElementPut = statsQueue.offer(1)
+            boolean secondElementPut = statsQueue.offer(2)
         then:
             firstElementPut
             !secondElementPut
@@ -137,36 +137,36 @@ class MPMCQueueStatsTest extends Specification
     def "should correctly clear queue"()
     {
         given:
-            mpmcQueueStats.addAll([1, 2, 5])
+            statsQueue.addAll([1, 2, 5])
         when:
-            mpmcQueueStats.clear()
+            statsQueue.clear()
         then:
-            mpmcQueueStats.isEmpty()
-            mpmcQueueStats.size() == 0
+            statsQueue.isEmpty()
+            statsQueue.size() == 0
     }
 
     def "should correctly retainAll"()
     {
         given:
             List<Integer> collection = [1, 2, 5]
-            mpmcQueueStats.addAll([1, 2, 6, 4, 3])
+            statsQueue.addAll([1, 2, 6, 4, 3])
         when:
-            mpmcQueueStats.retainAll(collection)
+            statsQueue.retainAll(collection)
         then:
-            mpmcQueueStats.containsAll([1, 2])
-            mpmcQueueStats.size() == 2
+            statsQueue.containsAll([1, 2])
+            statsQueue.size() == 2
     }
 
     def "should correctly removeAll"()
     {
         given:
             List<Integer> collection = [1, 2, 5]
-            mpmcQueueStats.addAll([1, 2, 6, 4, 3])
+            statsQueue.addAll([1, 2, 6, 4, 3])
         when:
-            mpmcQueueStats.removeAll(collection)
+            statsQueue.removeAll(collection)
         then:
-            mpmcQueueStats.containsAll([6, 4, 3])
-            mpmcQueueStats.size() == 3
+            statsQueue.containsAll([6, 4, 3])
+            statsQueue.size() == 3
     }
 
     private Runnable createPutElementsAction(int elements)
@@ -181,22 +181,22 @@ class MPMCQueueStatsTest extends Specification
                     {
                         sleep(4)
                     }
-                    mpmcQueueStats.add(i)
+                    statsQueue.add(i)
                 }
             }
         }
     }
 
-    private static MPMCQueueStats<Integer> createQueue(Queue<Integer> queue)
+    private static StatsQueue<Integer> createQueue(Queue<Integer> queue)
     {
-        LogFileConfiguration logFileConfiguration = LogFileConfiguration
+        QueueConfiguration queueConfiguration = QueueConfiguration
                 .builder()
                 .path(TestQueueUtil.PATH)
                 .build()
 
-        return MPMCQueueStats.<Integer> builder()
+        return StatsQueue.<Integer> builder()
                 .queue(queue)
-                .logFileConfiguration(logFileConfiguration)
+                .queueConfiguration(queueConfiguration)
                 .build()
     }
 }

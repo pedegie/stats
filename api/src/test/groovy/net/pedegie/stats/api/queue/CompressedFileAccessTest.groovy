@@ -26,11 +26,11 @@ class CompressedFileAccessTest extends Specification
     def "should enable compression when cycle duration is less than Integer.MAX_VALUE millis"()
     {
         given:
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when:
             queue.add(5)
             queue.add(5)
@@ -44,11 +44,11 @@ class CompressedFileAccessTest extends Specification
     def "should disable compression when cycle duration is more than Integer.MAX_VALUE millis"()
     {
         given:
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(30, ChronoUnit.DAYS))
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when:
             queue.add(5)
             queue.add(5)
@@ -62,12 +62,12 @@ class CompressedFileAccessTest extends Specification
     def "should disable compression when disable compression flag is set"()
     {
         given:
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .disableCompression(true)
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when:
             queue.add(5)
             queue.add(5)
@@ -82,14 +82,14 @@ class CompressedFileAccessTest extends Specification
     {
         given: "create queue with disabled compression"
             ZonedDateTime now = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T15:00:00"), ZoneId.of("UTC"))
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration
+            QueueConfiguration queueConfiguration = QueueConfiguration
                     .builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .fileCycleClock(Clock.fixed(now.toInstant(), ZoneId.of("UTC")))
                     .disableCompression(true)
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put 3 elements"
             queue.add(5)
             queue.add(5)
@@ -99,13 +99,13 @@ class CompressedFileAccessTest extends Specification
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
         when: "we create compressed queue which cycles matches to already existing one, created in previous step"
-            logFileConfiguration = LogFileConfiguration
+            queueConfiguration = QueueConfiguration
                     .builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .fileCycleClock(Clock.fixed(now.toInstant(), ZoneId.of("UTC")))
                     .build()
-            queue = TestQueueUtil.createQueue(logFileConfiguration)
+            queue = TestQueueUtil.createQueue(queueConfiguration)
             queue.add(3)
             queue.add(3)
             queue.add(3)
@@ -118,11 +118,11 @@ class CompressedFileAccessTest extends Specification
     def "should be able to append to already existing compressed file"()
     {
         given:
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when:
             queue.add(5)
             queue.add(5)
@@ -132,7 +132,7 @@ class CompressedFileAccessTest extends Specification
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Files.readAllBytes(logFile).length == 8 + CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
         when:
-            queue = TestQueueUtil.createQueue(logFileConfiguration)
+            queue = TestQueueUtil.createQueue(queueConfiguration)
             queue.add(5)
             queue.close()
         then:

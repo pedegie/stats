@@ -10,25 +10,29 @@ import java.util.function.Function;
 @Slf4j
 class FileAccessStrategy
 {
-    private static final int MB_500 = 1024 * 1024 * 512;
-
-    public static FileAccess accept(LogFileConfiguration logFileConfiguration)
+    public static FileAccess accept(QueueConfiguration queueConfiguration)
     {
-        LogFileConfigurationValidator.validate(logFileConfiguration);
-        return fileAccess(logFileConfiguration);
+        QueueConfigurationValidator.validate(queueConfiguration);
+        return fileAccess(queueConfiguration);
     }
 
-    private static FileAccess fileAccess(LogFileConfiguration configuration)
+    private static FileAccess fileAccess(QueueConfiguration configuration)
     {
         var offsetDateTime = newFileOffset(configuration);
         var fileName = PathDateFormatter.appendDate(configuration.getPath(), offsetDateTime);
-        var mmapSize = configuration.getMmapSize() == 0 ? MB_500 : FileUtils.roundToPageSize(configuration.getMmapSize());
+        var mmapSize = FileUtils.roundToPageSize(configuration.getMmapSize());
         var probeWriter = probeWriter(configuration, offsetDateTime);
 
-        return new FileAccess(fileName, mmapSize, probeWriter, offsetDateTime.toInstant().toEpochMilli());
+        return FileAccess.builder()
+                .filePath(fileName)
+                .mmapSize(mmapSize)
+                .probeWriterFactory(probeWriter)
+                .startCycleMillis(offsetDateTime.toInstant().toEpochMilli())
+                .synchronizer(configuration.getSynchronizer())
+                .build();
     }
 
-    private static ZonedDateTime newFileOffset(LogFileConfiguration configuration)
+    private static ZonedDateTime newFileOffset(QueueConfiguration configuration)
     {
         var time = Instant.now(configuration.getFileCycleClock()).toEpochMilli();
         var startIntervalTimestamp = time - (time % configuration.getFileCycleDurationInMillis());
@@ -38,7 +42,7 @@ class FileAccessStrategy
                 .truncatedTo(ChronoUnit.MINUTES);
     }
 
-    private static Function<FileAccessContext, ProbeWriter> probeWriter(LogFileConfiguration configuration, ZonedDateTime offsetDateTime)
+    private static Function<FileAccessContext, ProbeWriter> probeWriter(QueueConfiguration configuration, ZonedDateTime offsetDateTime)
     {
         if (configuration.getProbeWriter() != null)
         {

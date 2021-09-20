@@ -15,18 +15,17 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.Lock;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
 @Slf4j
-public class MPMCQueueStats<T> implements Queue<T>, Closeable
+public class StatsQueue<T> implements Queue<T>, Closeable
 {
-    @NonFinal // its effectively final, mutable just for tests purposes which re-sets logFileConfiguration with new Clock
-    LogFileConfiguration logFileConfiguration;
+    @NonFinal // its effectively final, mutable just for tests purposes which re-sets with new Clock
+    QueueConfiguration queueConfiguration;
     Queue<T> queue;
-    AtomicInteger count = new AtomicInteger(0);
-    ReentrantLock recycleLock = new ReentrantLock();
+    Counter count;
+    Lock recycleLock;
     WriteFilter writeFilter;
 
     @NonFinal
@@ -34,20 +33,23 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     @NonFinal
     long nextCycleMillisTimestamp;
     @NonFinal
-    private volatile boolean disabledDueCrash;
+    private volatile boolean closed;
 
     @Builder
-    protected MPMCQueueStats(Queue<T> queue, LogFileConfiguration logFileConfiguration, WriteFilter writeFilter, Tailer<Long, Integer> tailer)
+    protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration, WriteFilter writeFilter, Tailer<Long, Integer> tailer)
     {
+        logConfiguration(queueConfiguration);
         this.queue = queue;
         this.writeFilter = writeFilter == null ? WriteFilter.acceptAllFilter() : writeFilter;
+        this.count = queueConfiguration.getSynchronizer().newCounter();
+        this.recycleLock = queueConfiguration.getSynchronizer().newLock();
 
         if (recycleLock.tryLock())
         {
-            this.logFileConfiguration = logFileConfiguration;
+            this.queueConfiguration = queueConfiguration;
             try
             {
-                initializeFileAccess(logFileConfiguration);
+                initializeFileAccess(queueConfiguration);
             } finally
             {
                 recycleLock.unlock();
@@ -55,10 +57,22 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         }
     }
 
-    private void initializeFileAccess(LogFileConfiguration logFileConfiguration)
+    private void logConfiguration(QueueConfiguration conf)
     {
-        this.fileAccess = FileAccessStrategy.accept(logFileConfiguration);
-        this.nextCycleMillisTimestamp = fileAccess.getStartCycleMillis() + logFileConfiguration.getFileCycleDurationInMillis();
+        log.info("Initializing queue with:\n" +
+                        "path: {}\n" +
+                        "mmapSize: {} B\n" +
+                        "fileCycleDurationInMillis: {}\n" +
+                        "disableCompression: {}\n" +
+                        "disableSynchronization: {}", conf.getPath(), conf.getMmapSize(), conf.getFileCycleDurationInMillis(),
+                conf.isDisableCompression(), conf.isDisableSynchronization());
+    }
+
+    private void initializeFileAccess(QueueConfiguration queueConfiguration)
+    {
+        this.fileAccess = FileAccessStrategy.accept(queueConfiguration);
+        this.nextCycleMillisTimestamp = fileAccess.getStartCycleMillis() + queueConfiguration.getFileCycleDurationInMillis();
+        log.debug("Initialized new file access. Path: {}, nextCycleMillisTimestamp: {}", fileAccess.getFilePath(), nextCycleMillisTimestamp);
     }
 
     @Override
@@ -101,7 +115,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public boolean add(T t)
     {
         boolean added = queue.add(t);
-        if (!disabledDueCrash && added)
+        if (!closed && added)
         {
             int count = this.count.incrementAndGet();
             long time = time();
@@ -114,7 +128,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public boolean remove(Object o)
     {
         boolean removed = queue.remove(o);
-        if (!disabledDueCrash && removed)
+        if (!closed && removed)
         {
             int count = this.count.decrementAndGet();
             long time = time();
@@ -133,7 +147,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public boolean addAll(@NotNull Collection<? extends T> c)
     {
         boolean added = queue.addAll(c);
-        if (!disabledDueCrash && added)
+        if (!closed && added)
         {
             int count = this.count.addAndGet(c.size());
             long time = time();
@@ -146,7 +160,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public boolean removeAll(@NotNull Collection<?> c)
     {
         boolean removed = queue.removeAll(c);
-        if (!disabledDueCrash && removed)
+        if (!closed && removed)
         {
             setAndWriteCurrentSize();
         }
@@ -157,7 +171,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public boolean retainAll(@NotNull Collection<?> c)
     {
         boolean retained = queue.retainAll(c);
-        if (!disabledDueCrash && retained)
+        if (!closed && retained)
         {
             setAndWriteCurrentSize();
         }
@@ -177,7 +191,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public void clear()
     {
         queue.clear();
-        if (!disabledDueCrash)
+        if (!closed)
         {
             count.set(0);
             long time = time();
@@ -189,7 +203,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public boolean offer(T t)
     {
         boolean offered = queue.offer(t);
-        if (!disabledDueCrash && offered)
+        if (!closed && offered)
         {
             int count = this.count.incrementAndGet();
             long time = time();
@@ -202,7 +216,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public T remove()
     {
         T removed = queue.remove();
-        if (!disabledDueCrash)
+        if (!closed)
         {
             int count = this.count.decrementAndGet();
             long time = time();
@@ -215,7 +229,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     public T poll()
     {
         T polled = queue.poll();
-        if (!disabledDueCrash && polled != null)
+        if (!closed && polled != null)
         {
             int count = this.count.decrementAndGet();
             long time = time();
@@ -226,7 +240,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
 
     private long time()
     {
-        return Instant.now(logFileConfiguration.getFileCycleClock()).toEpochMilli();
+        return Instant.now(queueConfiguration.getFileCycleClock()).toEpochMilli();
     }
 
     @Override
@@ -244,6 +258,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     @Override
     public void close()
     {
+        closed = true;
         fileAccess.close();
     }
 
@@ -257,7 +272,7 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
             }
         } catch (Exception e)
         {
-            disabledDueCrash = true;
+            closed = true;
             log.error("Error occurred during writing to log file. Disabling writing to file.", e);
             fileAccess.close();
         }
@@ -269,10 +284,11 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
         {
             if (recycleLock.tryLock())
             {
+                log.debug("Current time ({} ms) exceeds cycle limit ({} ms). Recycling file...", time, nextCycleMillisTimestamp);
                 try
                 {
                     this.fileAccess.close();
-                    initializeFileAccess(logFileConfiguration);
+                    initializeFileAccess(queueConfiguration);
                 } finally
                 {
                     recycleLock.unlock();
@@ -293,6 +309,6 @@ public class MPMCQueueStats<T> implements Queue<T>, Closeable
     // only for testing
     public void setFileCycleClock(Clock fileCycleClock)
     {
-        this.logFileConfiguration = logFileConfiguration.withFileCycleClock(fileCycleClock);
+        this.queueConfiguration = queueConfiguration.withFileCycleClock(fileCycleClock);
     }
 }

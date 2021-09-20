@@ -22,16 +22,16 @@ class WriteFilterTest extends Specification
     def "acceptWhenSizeHigherThan filter should accept writes only when queue size higher than 3"()
     {
         given: "write filter which writes only when queue size is larger than 3"
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .disableCompression(true)
                     .build()
 
             WriteFilter writeFilter = WriteFilter.acceptWhenSizeHigherThan(3)
 
-            MPMCQueueStats<Integer> queue = MPMCQueueStats.<Integer> builder()
+            StatsQueue<Integer> queue = StatsQueue.<Integer> builder()
                     .queue(new ConcurrentLinkedQueue<Integer>())
-                    .logFileConfiguration(logFileConfiguration)
+                    .queueConfiguration(queueConfiguration)
                     .writeFilter(writeFilter)
                     .build()
         when: "we add 4 elements"
@@ -48,11 +48,11 @@ class WriteFilterTest extends Specification
     def "default write filter should be taken into account if none configured - which accepts all"()
     {
         given: "write filter which writes only when queue size is larger than 3"
-            LogFileConfiguration logFileConfiguration = LogFileConfiguration.builder()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .disableCompression(true)
                     .build()
-            MPMCQueueStats<Integer> queue = TestQueueUtil.createQueue(logFileConfiguration)
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we add 4 elements"
             queue.add(1)
             queue.add(1)
