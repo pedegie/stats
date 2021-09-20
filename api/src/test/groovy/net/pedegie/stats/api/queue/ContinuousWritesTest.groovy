@@ -32,14 +32,16 @@ class ContinuousWritesTest extends Specification
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
             int[] elementsToFillWholeBuffer = allocate(queueConfiguration)
 
-        when:
+        when: "we put one element more than mmap size"
             elementsToFillWholeBuffer.each { queue.add(it) }
-            queue.add(1)
+            queue.add(5)
+        and: "we put one more element due to dropped previous one on resize"
+            queue.add(5)
             queue.close()
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
-            probes.getInt(probes.limit() - DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM) == elementsToFillWholeBuffer.length + 1
+            probes.getInt(probes.limit() - DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM) == elementsToFillWholeBuffer.length + 2
     }
 
     def "should be able to append to log file when whole mmaped memory is dirty"()
@@ -63,8 +65,9 @@ class ContinuousWritesTest extends Specification
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
         then: "there are 2 probes"
             probes.limit() == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * range.size()
-        when:
+        when: "we put two more probes, because of one is dropped during resize"
             queue = TestQueueUtil.createQueue(queueConfiguration)
+            queue.add(5)
             queue.add(5)
             queue.close()
             probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
@@ -92,6 +95,7 @@ class ContinuousWritesTest extends Specification
             }
 
         when:
+            queue.add(1)
             queue.add(1)
             queue.close()
         then:

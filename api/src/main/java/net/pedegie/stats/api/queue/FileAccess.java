@@ -68,7 +68,7 @@ class FileAccess implements Closeable
         {
             if (resizeLock.tryLock())
             {
-                if(!needResize())
+                if (!needResize())
                     return;
 
                 log.debug("Next offset ({}) exceeds current bufferLimit ({}). Resizing mmaped file...", nextProbeOffset + probeWriter.probeSize(), bufferLimit);
@@ -76,7 +76,6 @@ class FileAccess implements Closeable
                 {
                     resize();
                     log.debug("mmaped file resized.");
-                    probeWriter.writeProbe(mappedFileBuffer, 0, probe, timestamp);
                 } finally
                 {
                     resizeLock.unlock();
@@ -101,7 +100,7 @@ class FileAccess implements Closeable
         close(fileSize);
         this.mappedFileBuffer = mmap(filePath, fileSize, mmapSize);
         PreToucher.preTouch(mappedFileBuffer);
-        this.bufferOffset.set(probeWriter.probeSize());
+        this.bufferOffset.set(0);
     }
 
     @SneakyThrows
