@@ -7,7 +7,6 @@ import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
-import net.openhft.chronicle.core.OS;
 
 import java.io.Closeable;
 import java.io.RandomAccessFile;
@@ -27,11 +26,11 @@ class FileAccess implements Closeable
     long startCycleMillis;
 
     @NonFinal
-    RandomAccessFile fileAccess;
+    volatile RandomAccessFile fileAccess;
     @NonFinal
-    ByteBuffer mappedFileBuffer;
+    volatile ByteBuffer mappedFileBuffer;
     @NonFinal
-    FileChannel channel;
+    volatile FileChannel channel;
 
     Counter bufferOffset;
     @Getter
@@ -39,7 +38,7 @@ class FileAccess implements Closeable
     int mmapSize;
     int bufferLimit;
     @NonFinal
-    long fileSize;
+    volatile long fileSize;
 
     @Builder
     FileAccess(Path filePath, int mmapSize, Function<FileAccessContext, ProbeWriter> probeWriterFactory, long startCycleMillis, Synchronizer synchronizer)
@@ -57,7 +56,6 @@ class FileAccess implements Closeable
         var accessContext = new FileAccessContext(mappedFileBuffer, bufferOffset, filePath);
         this.probeWriter = probeWriterFactory.apply(accessContext);
         PreToucher.preTouch(mappedFileBuffer);
-        OS.memory().storeFence();
     }
 
     public void writeProbe(int probe, long timestamp)
