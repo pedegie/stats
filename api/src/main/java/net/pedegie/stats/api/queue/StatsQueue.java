@@ -29,11 +29,11 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     WriteFilter writeFilter;
 
     @NonFinal
-    FileAccess fileAccess;
+    volatile FileAccess fileAccess;
     @NonFinal
-    long nextCycleMillisTimestamp;
+    volatile long nextCycleMillisTimestamp;
     @NonFinal
-    private volatile boolean closed;
+    volatile boolean closed;
 
     @Builder
     protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration, WriteFilter writeFilter, Tailer<Long, Integer> tailer)
@@ -43,18 +43,8 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         this.writeFilter = writeFilter == null ? WriteFilter.acceptAllFilter() : writeFilter;
         this.count = queueConfiguration.getSynchronizer().newCounter();
         this.recycleLock = queueConfiguration.getSynchronizer().newLock();
-
-        if (recycleLock.tryLock())
-        {
-            this.queueConfiguration = queueConfiguration;
-            try
-            {
-                initializeFileAccess(queueConfiguration);
-            } finally
-            {
-                recycleLock.unlock();
-            }
-        }
+        this.queueConfiguration = queueConfiguration;
+        initializeFileAccess(queueConfiguration);
     }
 
     private void logConfiguration(QueueConfiguration conf)
@@ -258,8 +248,19 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     @Override
     public void close()
     {
-        closed = true;
-        fileAccess.close();
+        recycleLock.lock();
+        try
+        {
+            if (closed)
+                return;
+
+            fileAccess.close();
+            closed = true;
+        } finally
+        {
+            recycleLock.unlock();
+        }
+
     }
 
     private void write(int count, long time)
@@ -272,9 +273,8 @@ public class StatsQueue<T> implements Queue<T>, Closeable
             }
         } catch (Exception e)
         {
-            closed = true;
             log.error("Error occurred during writing to log file. Disabling writing to file.", e);
-            fileAccess.close();
+            close();
         }
     }
 
@@ -284,6 +284,9 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         {
             if (recycleLock.tryLock())
             {
+                if (time < nextCycleMillisTimestamp)
+                    return;
+
                 log.debug("Current time ({} ms) exceeds cycle limit ({} ms). Recycling file...", time, nextCycleMillisTimestamp);
                 try
                 {
