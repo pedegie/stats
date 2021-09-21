@@ -70,7 +70,7 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
         var adjustedTimestamp = (int) (timestamp - startCycleTimestamp);
 
         if (adjustedTimestamp == 0)
-            adjustedTimestamp |= Integer.MAX_VALUE;
+            adjustedTimestamp |= Integer.MIN_VALUE;
 
         buffer.putInt(offset, probe);
         buffer.putInt(offset + PROBE_SIZE, adjustedTimestamp);

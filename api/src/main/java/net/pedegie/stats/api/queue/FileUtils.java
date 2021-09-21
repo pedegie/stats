@@ -76,39 +76,39 @@ public class FileUtils
         return rounded < 0 ? Integer.MAX_VALUE : rounded;
     }
 
-    static int findFirstFreeIndex(ByteBuffer buffer, int probeSize)
+    static int findFirstFreeIndex(ByteBuffer buffer)
     {
         if (isEmpty(buffer))
             return 0;
 
-        if (isFull(buffer, probeSize))
+        if (isFull(buffer))
             return buffer.limit();
 
-        var index = index(buffer, probeSize);
-        var offset = index % probeSize;
+        var index = index(buffer);
+        var offset = index % DefaultProbeWriter.PROBE_SIZE;
         if (offset == 0)
             return index;
-        return index - offset + probeSize;
+        return index - offset + DefaultProbeWriter.PROBE_SIZE;
     }
 
-    private static int index(ByteBuffer buffer, int probeSize)
+    private static int index(ByteBuffer buffer)
     {
         var low = 0;
-        var high = buffer.limit() - probeSize;
-
+        var high = buffer.limit() - DefaultProbeWriter.PROBE_SIZE;
         while (low < high)
         {
-            int mid = (low + high) / 2;
+            var mid = (low + high) / 2;
+            var adjusted = mid - (mid % DefaultProbeWriter.PROBE_SIZE);
 
-            if (buffer.getInt(mid) != 0)
+            if (buffer.getInt(adjusted) != 0)
             {
                 low = mid + 1;
                 continue;
             }
 
-            if (buffer.get(mid - 1) != 0)
+            if (buffer.get(adjusted - 1) != 0)
             {
-                return mid;
+                return adjusted;
             }
 
             high = mid;
@@ -121,8 +121,8 @@ public class FileUtils
         return buffer.getLong(0) == 0;
     }
 
-    private static boolean isFull(ByteBuffer buffer, int probeSize)
+    private static boolean isFull(ByteBuffer buffer)
     {
-        return buffer.getInt(buffer.limit() - probeSize) != 0;
+        return buffer.getInt(buffer.limit() - DefaultProbeWriter.PROBE_SIZE) != 0;
     }
 }

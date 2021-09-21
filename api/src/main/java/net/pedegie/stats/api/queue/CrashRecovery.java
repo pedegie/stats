@@ -22,7 +22,7 @@ class CrashRecovery
                 buffer.limit(0);
             } else
             {
-                log.warn("Found broken probe at index {}. Truncating to first correct probe.", buffer.limit());
+                log.warn("Found broken probe at index: {}, probe: {}. Truncating to first correct probe.", buffer.limit(), fetchProbe(recoverable, buffer));
 
                 buffer.limit(adjustToProbeSize(recoverable, buffer));
                 while (buffer.limit() > recoverable.headerSize() && needRecovery(buffer, recoverable)) ;
@@ -33,9 +33,20 @@ class CrashRecovery
         return index;
     }
 
+    private static String fetchProbe(Recoverable recoverable, ByteBuffer buffer)
+    {
+        var probe = new StringBuilder(recoverable.probeSize() * Byte.SIZE);
+        for (int i = buffer.limit() - recoverable.probeSize(); i < buffer.limit(); i++)
+        {
+            probe.append(Integer.toBinaryString(buffer.get(i) & 255 | 256).substring(1));
+        }
+
+        return probe.toString();
+    }
+
     private static boolean needRecovery(ByteBuffer buffer, Recoverable recoverable)
     {
-        var index = FileUtils.findFirstFreeIndex(buffer, MAGIC_NUMBER);
+        var index = FileUtils.findFirstFreeIndex(buffer);
         var bufferLimitTheSameAsIndex = index == buffer.limit();
         buffer.limit(index);
 
