@@ -114,29 +114,4 @@ class CompressedFileAccessTest extends Specification
             Path logFile2 = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Files.readAllBytes(logFile2).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 6
     }
-
-    def "should be able to append to already existing compressed file"()
-    {
-        given:
-            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
-                    .path(TestQueueUtil.PATH)
-                    .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
-                    .build()
-            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
-        when:
-            queue.add(5)
-            queue.add(5)
-            queue.add(5)
-            queue.close()
-        then:
-            Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == 8 + CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
-        when:
-            queue = TestQueueUtil.createQueue(queueConfiguration)
-            queue.add(5)
-            queue.close()
-        then:
-            Path logFile2 = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile2).length == 8 + CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 4
-    }
 }
