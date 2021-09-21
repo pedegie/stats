@@ -12,6 +12,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -24,6 +25,8 @@ import java.util.stream.IntStream;
 
 public class StatsBenchmark
 {
+    private static final int REAL_BENCHMARK = Integer.MIN_VALUE;
+
     private static final int POISON_PILL = -1;
     private static final Logger log = LogManager.getLogger(StatsBenchmark.class);
 
@@ -33,17 +36,24 @@ public class StatsBenchmark
     public static void main(String[] args)
     {
         var programArguments = ProgramArguments.initialize(args);
+        double[] benchmarkResultsInMillis = new double[programArguments.getWarmupIterations() + 1];
+
         for (int i = 0; i < programArguments.getWarmupIterations(); i++)
         {
-            log.info("Started {} warmup iteration", i + 1);
-            var benchmarkDurationNS = runBenchmark(programArguments);
-            log.info("Warmup iteration take {} ms", benchmarkDurationNS / 1000000.0);
+            var benchmarkDuration = runBenchmark(programArguments, i + 1);
+            benchmarkResultsInMillis[i] = benchmarkDuration;
         }
-        log.info("Started Real Benchmark");
-        var benchmarkDurationNS = runBenchmark(programArguments);
-        log.info("Real Benchmark take {} millis", benchmarkDurationNS / 1000000.0);
+        var benchmarkDuration = runBenchmark(programArguments, REAL_BENCHMARK);
+        benchmarkResultsInMillis[programArguments.getWarmupIterations()] = benchmarkDuration;
 
-        log.info("Benchmark finished");
+        StringBuilder summary = new StringBuilder();
+        for (int i = 0; i < programArguments.getWarmupIterations(); i++)
+        {
+            summary.append(i + 1).append(" warmup iteration take ").append(benchmarkResultsInMillis[i]).append(" ms\n");
+        }
+        summary.append("Real benchmark take ").append(benchmarkResultsInMillis[programArguments.getWarmupIterations()]).append(" ms");
+
+        log.info("Benchmark finished, summary:\n{}", summary.toString());
     }
 
     static class NamedThreadFactory implements ThreadFactory
@@ -62,7 +72,7 @@ public class StatsBenchmark
     }
 
     @SneakyThrows
-    private static long runBenchmark(ProgramArguments programArguments)
+    private static double runBenchmark(ProgramArguments programArguments, int iteration)
     {
         Queue<Integer> queue = createStatsQueue();
         var producer = producer(programArguments, queue);
@@ -81,8 +91,25 @@ public class StatsBenchmark
                 .forEach(index -> futures[index] = runOn(consumer, consumerPool));
 
         var startTimestamp = System.nanoTime();
+
+        if (iteration == REAL_BENCHMARK)
+        {
+            log.info("Started Real Benchmark");
+        } else
+        {
+            log.info("Started {} warmup iteration", iteration);
+        }
         CompletableFuture.allOf(futures).get(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
-        var benchmarkDuration = System.nanoTime() - startTimestamp;
+
+        var benchmarkDuration = toMillis(System.nanoTime() - startTimestamp);
+        if (iteration == REAL_BENCHMARK)
+        {
+            log.info("Real Benchmark take {} ms", benchmarkDuration);
+        } else
+        {
+            log.info("Warmup iteration take {} ms", benchmarkDuration);
+        }
+
 
         if (queue instanceof StatsQueue)
         {
@@ -99,6 +126,7 @@ public class StatsBenchmark
             log.error("Timeouted, hardcoded timeout: {} {}", BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
             System.exit(1);
         }
+
         return benchmarkDuration;
     }
 
@@ -162,5 +190,10 @@ public class StatsBenchmark
             runnable.run();
             return null;
         }, pool);
+    }
+
+    private static double toMillis(long nanoSeconds)
+    {
+        return nanoSeconds / 1000000.0;
     }
 }
