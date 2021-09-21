@@ -5,6 +5,7 @@ import spock.lang.Specification
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.ZonedDateTime
 
 class CrashQueueTest extends Specification
 {
@@ -25,7 +26,7 @@ class CrashQueueTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .probeWriter(new CrashingProbes.DefaultCrashingProbeWriter(1))
-                    .disableCompression(true)
+                    .disableCompression(disableCompression)
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we add 2 elements"
@@ -34,6 +35,10 @@ class CrashQueueTest extends Specification
         then: "there is single broken element in file but two elements in decorated queue"
             queue.size() == 2
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM
+            Files.readAllBytes(logFile).length == probeSize
+        where:
+            disableCompression << [true, false]
+            probeSize << [12, 12]
+            probeWriter << [new CrashingProbes.DefaultCrashingProbeWriter(1), new CrashingProbes.CompressedCrashingProbeWriter(ZonedDateTime.now(), 1)]
     }
 }

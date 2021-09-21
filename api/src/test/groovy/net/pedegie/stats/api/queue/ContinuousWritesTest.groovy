@@ -26,11 +26,11 @@ class ContinuousWritesTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .mmapSize(OS.pageSize())
                     .path(TestQueueUtil.PATH)
-                    .disableCompression(true)
+                    .disableCompression(disableCompression)
                     .build()
 
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
-            int[] elementsToFillWholeBuffer = allocate(queueConfiguration)
+            int[] elementsToFillWholeBuffer = allocate(queueConfiguration, probeSize)
 
         when: "we put one element more than mmap size"
             elementsToFillWholeBuffer.each { queue.add(it) }
@@ -41,7 +41,10 @@ class ContinuousWritesTest extends Specification
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
-            probes.getInt(probes.limit() - DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM) == elementsToFillWholeBuffer.length + 2
+            probes.getInt(probes.limit() - probeSize) == elementsToFillWholeBuffer.length + 2
+        where:
+            disableCompression << [true, false]
+            probeSize << [DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM, CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM]
     }
 
     def "should be able to append to log file when whole mmaped memory is dirty"()
@@ -50,29 +53,32 @@ class ContinuousWritesTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .disableCompression(true)
+                    .disableCompression(disableCompression)
                     .build()
 
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
-
-            def range = 1..(OS.pageSize() / DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM)
+        when: "we put elements equal to mmaped size"
+            def range = 1..((OS.pageSize() / probeSize) - (headerSize / probeSize))
             range.forEach {
                 queue.add(it.intValue())
             }
             queue.close()
-        when:
+        then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
-        then: "there are 2 probes"
-            probes.limit() == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * range.size()
+            probes.limit() == probeSize * range.size() + headerSize
         when: "we put two more probes, because of one is dropped during resize"
             queue = TestQueueUtil.createQueue(queueConfiguration)
             queue.add(5)
             queue.add(5)
             queue.close()
             probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
-        then: "there are 3 probes"
-            probes.limit() == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * (range.size() + 1)
+        then: "there is additional probe"
+            probes.limit() == probeSize * (range.size() + 1) + headerSize
+        where:
+            disableCompression << [true, false]
+            probeSize << [DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM, CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM]
+            headerSize << [0, CompressedProbeWriter.HEADER_SIZE]
     }
 
     // it takes too long, run with integration tests nightly CI build
@@ -82,29 +88,31 @@ class ContinuousWritesTest extends Specification
         given:
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .mmapSize(Integer.MAX_VALUE)
-                    .disableCompression(true)
+                    .disableCompression(disableCompression)
                     .path(TestQueueUtil.PATH)
                     .build()
 
             StatsQueue queue = TestQueueUtil.createQueue(queueConfiguration)
 
-            int[] elementsToFillWholeBuffer = allocate(queueConfiguration)
+            int[] elementsToFillWholeBuffer = allocate(queueConfiguration, probeSize)
+        when:
             for (int i = 0; i < elementsToFillWholeBuffer.length; i++)
             {
                 queue.add(elementsToFillWholeBuffer[i])
             }
-
-        when:
             queue.add(1)
             queue.add(1)
             queue.close()
         then:
             noExceptionThrown()
+        where:
+            disableCompression << [true, false]
+            probeSize << [DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM, CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM]
     }
 
-    private static int[] allocate(QueueConfiguration queueConfiguration)
+    private static int[] allocate(QueueConfiguration queueConfiguration, int probeSize)
     {
-        int elements = (int) (queueConfiguration.mmapSize / DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM)
+        int elements = (int) (queueConfiguration.mmapSize / probeSize)
         return new int[elements]
     }
 }
