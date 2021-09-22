@@ -36,11 +36,11 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     volatile boolean closed;
 
     @Builder
-    protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration, WriteFilter writeFilter, Tailer<Long, Integer> tailer)
+    protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration, Tailer<Long, Integer> tailer)
     {
         logConfiguration(queueConfiguration);
         this.queue = queue;
-        this.writeFilter = writeFilter == null ? WriteFilter.acceptAllFilter() : writeFilter;
+        this.writeFilter = queueConfiguration.getWriteFilter();
         this.count = queueConfiguration.getSynchronizer().newCounter();
         this.recycleLock = queueConfiguration.getSynchronizer().newLock();
         this.queueConfiguration = queueConfiguration;

@@ -7,8 +7,6 @@ import java.nio.ByteBuffer;
 @Slf4j
 class CrashRecovery
 {
-    private static final int MAGIC_NUMBER = 4;
-
     public static int recover(FileAccessContext accessContext, Recoverable recoverable)
     {
         var buffer = accessContext.getBuffer();
