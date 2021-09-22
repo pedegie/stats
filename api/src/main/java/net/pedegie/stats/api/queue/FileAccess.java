@@ -37,11 +37,12 @@ class FileAccess implements Closeable
     Path filePath;
     int mmapSize;
     int bufferLimit;
+    boolean unmapOnClose;
     @NonFinal
     volatile long fileSize;
 
     @Builder
-    FileAccess(Path filePath, int mmapSize, Function<FileAccessContext, ProbeWriter> probeWriterFactory, long startCycleMillis, Synchronizer synchronizer)
+    FileAccess(Path filePath, int mmapSize, Function<FileAccessContext, ProbeWriter> probeWriterFactory, long startCycleMillis, Synchronizer synchronizer, boolean unmapOnClose)
     {
         log.info("Creating {}", filePath.toString());
         FileUtils.createFile(filePath);
@@ -50,6 +51,7 @@ class FileAccess implements Closeable
         this.startCycleMillis = startCycleMillis;
         this.mappedFileBuffer = mmap(this.filePath, this.fileSize, this.mmapSize);
         this.bufferLimit = this.mappedFileBuffer.limit();
+        this.unmapOnClose = unmapOnClose;
         this.resizeLock = synchronizer.newLock();
         this.bufferOffset = synchronizer.newCounter();
 
@@ -141,7 +143,6 @@ class FileAccess implements Closeable
         mappedFileBuffer = null;
         channel = null;
 
-        boolean unmapOnClose = true; // todo
         if (unmapOnClose)
         {
             System.gc();

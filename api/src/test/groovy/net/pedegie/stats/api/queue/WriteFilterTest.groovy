@@ -25,14 +25,11 @@ class WriteFilterTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .disableCompression(true)
+                    .writeFilter(WriteFilter.acceptWhenSizeHigherThan(3))
                     .build()
-
-            WriteFilter writeFilter = WriteFilter.acceptWhenSizeHigherThan(3)
-
             StatsQueue<Integer> queue = StatsQueue.<Integer> builder()
                     .queue(new ConcurrentLinkedQueue<Integer>())
                     .queueConfiguration(queueConfiguration)
-                    .writeFilter(writeFilter)
                     .build()
         when: "we add 4 elements"
             queue.add(1)

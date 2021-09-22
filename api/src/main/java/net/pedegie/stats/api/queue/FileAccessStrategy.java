@@ -29,6 +29,7 @@ class FileAccessStrategy
                 .probeWriterFactory(probeWriter)
                 .startCycleMillis(offsetDateTime.toInstant().toEpochMilli())
                 .synchronizer(configuration.getSynchronizer())
+                .unmapOnClose(configuration.isUnmapOnClose())
                 .build();
     }
 

@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.With;
 import lombok.experimental.FieldDefaults;
-import lombok.experimental.NonFinal;
 
 import java.nio.file.Path;
 import java.time.Clock;
@@ -22,35 +21,32 @@ public class QueueConfiguration
     private static final Duration DEFAULT_CYCLE_DURATION = Duration.of(1, ChronoUnit.DAYS);
     @Getter
     Path path;
-    @NonFinal
-    int mmapSize;
+    @Getter
+    @Builder.Default
+    int mmapSize = MB_500;
     Duration fileCycleDuration;
-    @NonFinal
-    Clock fileCycleClock;
+    @Getter
+    @Builder.Default
+    Clock fileCycleClock = Clock.systemDefaultZone();
     @Getter
     boolean disableCompression;
     @Getter
     Function<FileAccessContext, ProbeWriter> probeWriter;
     @Getter
     boolean disableSynchronization;
-
-    public Clock getFileCycleClock()
-    {
-        return fileCycleClock == null ? fileCycleClock = Clock.systemDefaultZone() : fileCycleClock;
-    }
+    @Getter
+    boolean unmapOnClose;
+    @Getter
+    @Builder.Default
+    WriteFilter writeFilter = WriteFilter.acceptAllFilter();
 
     public long getFileCycleDurationInMillis()
     {
         return (fileCycleDuration == null ? DEFAULT_CYCLE_DURATION : fileCycleDuration).getSeconds() * 1000;
     }
 
-    public int getMmapSize()
-    {
-        return mmapSize == 0 ? mmapSize = MB_500 : mmapSize;
-    }
-
     public Synchronizer getSynchronizer()
     {
-       return disableSynchronization ? Synchronizer.NON_SYNCHRONIZED : Synchronizer.CONCURRENT;
+        return disableSynchronization ? Synchronizer.NON_SYNCHRONIZED : Synchronizer.CONCURRENT;
     }
 }
