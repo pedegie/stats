@@ -12,7 +12,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -20,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.stream.IntStream;
 
@@ -58,6 +58,8 @@ public class StatsBenchmark
 
     static class NamedThreadFactory implements ThreadFactory
     {
+        private final AtomicInteger threadNumber = new AtomicInteger(0);
+
         private final String name;
 
         public NamedThreadFactory(String name)
@@ -67,7 +69,7 @@ public class StatsBenchmark
 
         public Thread newThread(@NotNull Runnable r)
         {
-            return new Thread(r, name);
+            return new Thread(r, String.format(name, threadNumber.incrementAndGet()));
         }
     }
 
@@ -78,8 +80,8 @@ public class StatsBenchmark
         var producer = producer(programArguments, queue);
         var consumer = consumer(queue);
 
-        var producerPool = Executors.newFixedThreadPool(programArguments.getProducerThreads(), new NamedThreadFactory("producer_pool"));
-        var consumerPool = Executors.newFixedThreadPool(programArguments.getConsumerThreads(), new NamedThreadFactory("consumer_pool"));
+        var producerPool = Executors.newFixedThreadPool(programArguments.getProducerThreads(), new NamedThreadFactory("producer_pool_%d"));
+        var consumerPool = Executors.newFixedThreadPool(programArguments.getConsumerThreads(), new NamedThreadFactory("consumer_pool_%d"));
 
         int consumerAndProducerThreads = programArguments.getProducerThreads() + programArguments.getConsumerThreads();
         CompletableFuture<?>[] futures = new CompletableFuture[consumerAndProducerThreads];
@@ -110,12 +112,6 @@ public class StatsBenchmark
             log.info("Warmup iteration take {} ms", benchmarkDuration);
         }
 
-
-        if (queue instanceof StatsQueue)
-        {
-            ((StatsQueue) queue).close();
-        }
-
         producerPool.shutdown();
         consumerPool.shutdown();
         boolean producerTerminated = producerPool.awaitTermination(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
@@ -125,6 +121,11 @@ public class StatsBenchmark
         {
             log.error("Timeouted, hardcoded timeout: {} {}", BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
             System.exit(1);
+        }
+
+        if (queue instanceof StatsQueue)
+        {
+            ((StatsQueue) queue).close();
         }
 
         return benchmarkDuration;
@@ -137,6 +138,7 @@ public class StatsBenchmark
 
         var queueConfiguration = QueueConfiguration.builder()
                 .path(statsQueue)
+                .unmapOnClose(false)
                 .mmapSize(Integer.MAX_VALUE)
                 .build();
 

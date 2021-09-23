@@ -33,6 +33,7 @@ class FileAccess implements Closeable
     volatile FileChannel channel;
 
     Counter bufferOffset;
+
     @Getter
     Path filePath;
     int mmapSize;
@@ -40,6 +41,9 @@ class FileAccess implements Closeable
     boolean unmapOnClose;
     @NonFinal
     volatile long fileSize;
+
+    @NonFinal
+    int resizes;
 
     @Builder
     FileAccess(Path filePath, int mmapSize, Function<FileAccessContext, ProbeWriter> probeWriterFactory, long startCycleMillis, Synchronizer synchronizer, boolean unmapOnClose)
@@ -64,18 +68,19 @@ class FileAccess implements Closeable
     {
         int nextProbeOffset = nextOffset();
         int offsetAfterWriting = nextProbeOffset + probeWriter.probeSize();
-        if (offsetAfterWriting >= bufferLimit || offsetAfterWriting < 0)
+        if (offsetAfterWriting > bufferLimit || offsetAfterWriting < 0)
         {
             if (resizeLock.tryLock())
             {
                 if (!needResize())
                     return;
 
+                resizes++;
                 log.debug("Next offset ({}) exceeds current bufferLimit ({}). Resizing mmaped file...", nextProbeOffset + probeWriter.probeSize(), bufferLimit);
                 try
                 {
                     resize();
-                    log.debug("mmaped file resized.");
+                    log.debug("mmaped file resized, resizes: {}.", resizes);
                 } finally
                 {
                     resizeLock.unlock();
@@ -84,7 +89,9 @@ class FileAccess implements Closeable
             // drop probes during resize
         } else
         {
+            resizeLock.lock();
             probeWriter.writeProbe(mappedFileBuffer, nextProbeOffset, probe, timestamp);
+            resizeLock.unlock();
         }
     }
 

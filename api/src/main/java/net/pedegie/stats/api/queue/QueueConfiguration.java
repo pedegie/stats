@@ -35,7 +35,8 @@ public class QueueConfiguration
     @Getter
     boolean disableSynchronization;
     @Getter
-    boolean unmapOnClose;
+    @Builder.Default
+    boolean unmapOnClose = true;
     @Getter
     @Builder.Default
     WriteFilter writeFilter = WriteFilter.acceptAllFilter();
