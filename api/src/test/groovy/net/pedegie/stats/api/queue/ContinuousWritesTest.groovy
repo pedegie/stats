@@ -65,6 +65,7 @@ class ContinuousWritesTest extends Specification
                 queue.add(it.intValue())
             }
             queue.close()
+            sleep(1000)
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
