@@ -3,7 +3,6 @@ package net.pedegie.stats.api.queue;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.With;
 import lombok.experimental.FieldDefaults;
 
 import java.nio.file.Path;
@@ -14,17 +13,16 @@ import java.util.function.Function;
 
 @Builder
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
-@With
 public class QueueConfiguration
 {
-    private static final int MB_500 = 1024 * 1024 * 512;
     private static final Duration DEFAULT_CYCLE_DURATION = Duration.of(1, ChronoUnit.DAYS);
     @Getter
     Path path;
     @Getter
+    int mmapSize;
+    @Getter
     @Builder.Default
-    int mmapSize = MB_500;
-    Duration fileCycleDuration;
+    Duration fileCycleDuration = DEFAULT_CYCLE_DURATION;
     @Getter
     @Builder.Default
     Clock fileCycleClock = Clock.systemDefaultZone();
@@ -43,7 +41,7 @@ public class QueueConfiguration
 
     public long getFileCycleDurationInMillis()
     {
-        return (fileCycleDuration == null ? DEFAULT_CYCLE_DURATION : fileCycleDuration).getSeconds() * 1000;
+        return fileCycleDuration.getSeconds() * 1000;
     }
 
     public Synchronizer getSynchronizer()

@@ -35,9 +35,11 @@ class ContinuousWritesTest extends Specification
         when: "we put one element more than mmap size"
             elementsToFillWholeBuffer.each { queue.add(it) }
             queue.add(5)
+            sleep(1000)
         and: "we put one more element due to dropped previous one on resize"
             queue.add(5)
             queue.close()
+            sleep(1000)
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
@@ -70,8 +72,10 @@ class ContinuousWritesTest extends Specification
         when: "we put two more probes, because of one is dropped during resize"
             queue = TestQueueUtil.createQueue(queueConfiguration)
             queue.add(5)
+            sleep(1000)
             queue.add(5)
             queue.close()
+            sleep(1000)
             probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
         then: "there is additional probe"
             probes.limit() == probeSize * (range.size() + 1) + headerSize

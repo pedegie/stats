@@ -6,7 +6,7 @@ import java.util.function.Function;
 
 public interface ProbeWriter
 {
-    void writeProbe(ByteBuffer buffer, int offset, int probe, long timestamp);
+    void writeProbe(ByteBuffer buffer, Probe probe);
 
     int probeSize();
 

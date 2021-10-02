@@ -1,5 +1,6 @@
 package net.pedegie.stats.api.queue
 
+import lombok.Builder
 import spock.lang.Specification
 import spock.lang.Unroll
 
@@ -7,10 +8,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
+import java.util.function.Function
 
 class RecyclerTest extends Specification
 {
@@ -122,23 +125,27 @@ class RecyclerTest extends Specification
     {
         given: "create queue with one minute file cycle"
             ZonedDateTime time = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:00:00"), ZoneId.of("UTC"))
+            SpyClock spyClock = new SpyClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
             QueueConfiguration queueConfiguration = QueueConfiguration
-                    .builder()
-                    .path(TestQueueUtil.PATH)
-                    .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
-                    .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
-                    .disableCompression(disableCompression)
-                    .build()
+                            .builder()
+                            .path(TestQueueUtil.PATH)
+                            .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
+                            .fileCycleClock(spyClock)
+                            .disableCompression(disableCompression)
+                            .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put 2 elements to queue"
             queue.add(5)
             queue.add(5)
         and: "we set time one cycle ahead"
             time = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:01:00"), ZoneId.of("UTC"))
-            queue.setFileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
-        and: "we put one more element"
+            spyClock.setClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
+        and: "we put two more elements (one will be dropped during recyle)"
+            queue.add(5)
+            sleep(1000)
             queue.add(5)
             queue.close()
+            sleep(1000)
         then: "it should create second file representing next one-minute cycle"
             List<Path> logFiles = TestQueueUtil.findMany(TestQueueUtil.PATH).sort { it.toString() }
             logFiles.size() == 2
@@ -157,4 +164,34 @@ class RecyclerTest extends Specification
             headerSize << [0, CompressedProbeWriter.HEADER_SIZE]
     }
 
+
+    private static class SpyClock extends Clock
+    {
+        Clock clock
+
+        SpyClock(Clock clock)
+        {
+            this.clock = clock
+        }
+
+        @Override
+        ZoneId getZone() {
+            return clock.getZone()
+        }
+
+        @Override
+        Clock withZone(ZoneId zone) {
+            return clock.withZone(zone)
+        }
+
+        @Override
+        Instant instant() {
+            return clock.instant()
+        }
+
+        void setClock(Clock clock)
+        {
+            this.clock = clock
+        }
+    }
 }

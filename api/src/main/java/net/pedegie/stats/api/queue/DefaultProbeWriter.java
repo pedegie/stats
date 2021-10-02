@@ -19,7 +19,7 @@ class DefaultProbeWriter implements ProbeWriter, Recoverable
         {
             log.debug("Recover");
             var index = CrashRecovery.recover(accessContext, this);
-            accessContext.seekTo(index);
+            buffer.position(index);
         }
     }
 
@@ -29,13 +29,11 @@ class DefaultProbeWriter implements ProbeWriter, Recoverable
     }
 
     @Override
-    public void writeProbe(ByteBuffer buffer, int offset, int probe, long timestamp)
+    public void writeProbe(ByteBuffer buffer, Probe probe)
     {
-        if (probe == 0)
-            probe |= Integer.MIN_VALUE;
-
-        buffer.putInt(offset, probe);
-        buffer.putLong(offset + PROBE_SIZE, timestamp);
+        var value = probe.getProbe() == 0 ? (probe.getProbe() | Integer.MIN_VALUE) : probe.getProbe();
+        buffer.putInt(value);
+        buffer.putLong(probe.getTimestamp());
     }
 
     @Override

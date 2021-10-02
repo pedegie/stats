@@ -25,20 +25,22 @@ class CrashQueueTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .probeWriter(new CrashingProbes.DefaultCrashingProbeWriter(1))
+                    .probeWriter(probeWriter)
                     .disableCompression(disableCompression)
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we add 2 elements"
             queue.add(5)
             queue.add(5)
+            queue.close()
+            sleep(1000)
         then: "there is single broken element in file but two elements in decorated queue"
             queue.size() == 2
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == probeSize
+            Files.readAllBytes(logFile).length == halfProbeSize
         where:
             disableCompression << [true, false]
-            probeSize << [12, 12]
+            halfProbeSize << [4, 12]
             probeWriter << [new CrashingProbes.DefaultCrashingProbeWriter(1), new CrashingProbes.CompressedCrashingProbeWriter(ZonedDateTime.now(), 1)]
     }
 }

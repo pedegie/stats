@@ -10,26 +10,24 @@ import java.util.function.Function;
 @Slf4j
 class FileAccessStrategy
 {
-    public static FileAccess accept(QueueConfiguration queueConfiguration)
-    {
-        QueueConfigurationValidator.validate(queueConfiguration);
-        return fileAccess(queueConfiguration);
-    }
+    private static final int MB_500 = 1024 * 1024 * 512;
 
-    private static FileAccess fileAccess(QueueConfiguration configuration)
+    public static FileAccessContext fileAccess(QueueConfiguration configuration)
     {
         var offsetDateTime = newFileOffset(configuration);
         var fileName = PathDateFormatter.appendDate(configuration.getPath(), offsetDateTime);
-        var mmapSize = FileUtils.roundToPageSize(configuration.getMmapSize());
         var probeWriter = probeWriter(configuration, offsetDateTime);
+        var nextCycleTimestampMillis = offsetDateTime.toInstant().toEpochMilli() + configuration.getFileCycleDuration().getSeconds() * 1000;
+        var mmapSize = configuration.getMmapSize() == 0 ? MB_500 : FileUtils.roundToPageSize(configuration.getMmapSize());
 
-        return FileAccess.builder()
-                .filePath(fileName)
+        FileUtils.createFile(fileName);
+
+        return FileAccessContext.builder()
+                .fileName(fileName)
                 .mmapSize(mmapSize)
-                .probeWriterFactory(probeWriter)
-                .startCycleMillis(offsetDateTime.toInstant().toEpochMilli())
-                .synchronizer(configuration.getSynchronizer())
-                .unmapOnClose(configuration.isUnmapOnClose())
+                .probeWriter(probeWriter)
+                .nextCycleTimestampMillis(nextCycleTimestampMillis)
+                .queueConfiguration(configuration)
                 .build();
     }
 

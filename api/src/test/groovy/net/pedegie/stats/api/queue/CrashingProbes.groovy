@@ -20,27 +20,26 @@ class CrashingProbes
 
         CompressedCrashingProbeWriter(ZonedDateTime zonedDateTime, FileAccessContext fileAccessContext, int crashOnWrite)
         {
-            fileAccessContext.bufferOffset.getAndAdd(8)
             fileAccessContext.buffer.putLong(zonedDateTime.toInstant().toEpochMilli() | Long.MIN_VALUE)
             this.zonedDateTime = zonedDateTime
             this.crashOnWrite = crashOnWrite
         }
 
         @Override
-        void writeProbe(ByteBuffer buffer, int offset, int probe, long timestamp)
+        void writeProbe(ByteBuffer buffer, Probe probe)
         {
             if (crashOnWrite == -1)
             {
                 throw new TestExpectedException("Intentionally! Mocking crashes for testing")
             }
 
-            buffer.putInt(offset, probe)
+            buffer.putInt(probe.probe)
             if (++writes == crashOnWrite)
             {
                 throw new TestExpectedException("Intentionally! Mocking crashes for testing")
             } else
             {
-                buffer.putInt(offset + 4, 1)
+                buffer.putInt(1)
             }
         }
 
@@ -68,20 +67,20 @@ class CrashingProbes
         }
 
         @Override
-        void writeProbe(ByteBuffer buffer, int offset, int probe, long timestamp)
+        void writeProbe(ByteBuffer buffer, Probe probe)
         {
             if (crashOnWrite == -1)
             {
                 throw new TestExpectedException("Intentionally! Mocking crashes for testing")
             }
 
-            buffer.putInt(offset, probe)
+            buffer.putInt(probe.probe)
             if (++writes == crashOnWrite)
             {
                 throw new TestExpectedException("Intentionally! Mocking crashes for testing")
             } else
             {
-                buffer.putLong(offset + 4, 1)
+                buffer.putLong(1)
             }
         }
 

@@ -21,30 +21,27 @@ import java.util.concurrent.locks.Lock;
 @Slf4j
 public class StatsQueue<T> implements Queue<T>, Closeable
 {
-    @NonFinal // its effectively final, mutable just for tests purposes which re-sets with new Clock
-    QueueConfiguration queueConfiguration;
+    private static final FileAccessWorker fileAccessWorker = new FileAccessWorker();
+    Clock fileCycleClock;
     Queue<T> queue;
     Counter count;
-    Lock recycleLock;
+    Lock closeLock;
     WriteFilter writeFilter;
-
-    @NonFinal
-    volatile FileAccess fileAccess;
-    @NonFinal
-    volatile long nextCycleMillisTimestamp;
     @NonFinal
     volatile boolean closed;
+    private final int fileAccessId;
 
     @Builder
     protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration, Tailer<Long, Integer> tailer)
     {
+        QueueConfigurationValidator.validate(queueConfiguration);
         logConfiguration(queueConfiguration);
         this.queue = queue;
         this.writeFilter = queueConfiguration.getWriteFilter();
         this.count = queueConfiguration.getSynchronizer().newCounter();
-        this.recycleLock = queueConfiguration.getSynchronizer().newLock();
-        this.queueConfiguration = queueConfiguration;
-        initializeFileAccess(queueConfiguration);
+        this.closeLock = queueConfiguration.getSynchronizer().newLock();
+        this.fileCycleClock = queueConfiguration.getFileCycleClock();
+        this.fileAccessId = fileAccessWorker.registerFile(queueConfiguration).join(); // todo timeout
     }
 
     private void logConfiguration(QueueConfiguration conf)
@@ -56,13 +53,6 @@ public class StatsQueue<T> implements Queue<T>, Closeable
                         "disableCompression: {}\n" +
                         "disableSynchronization: {}", conf.getPath(), conf.getMmapSize(), conf.getFileCycleDurationInMillis(),
                 conf.isDisableCompression(), conf.isDisableSynchronization());
-    }
-
-    private void initializeFileAccess(QueueConfiguration queueConfiguration)
-    {
-        this.fileAccess = FileAccessStrategy.accept(queueConfiguration);
-        this.nextCycleMillisTimestamp = fileAccess.getStartCycleMillis() + queueConfiguration.getFileCycleDurationInMillis();
-        log.debug("Initialized new file access. Path: {}, nextCycleMillisTimestamp: {}", fileAccess.getFilePath(), nextCycleMillisTimestamp);
     }
 
     @Override
@@ -230,7 +220,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
 
     private long time()
     {
-        return Instant.now(queueConfiguration.getFileCycleClock()).toEpochMilli();
+        return Instant.now(fileCycleClock).toEpochMilli();
     }
 
     @Override
@@ -245,73 +235,30 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         return queue.peek();
     }
 
+    private void write(int count, long time)
+    {
+        if (writeFilter.shouldWrite(count, time))
+        {
+            fileAccessWorker.writeProbe(new Probe(fileAccessId, count, time));
+        }
+    }
+
     @Override
     public void close()
     {
-        recycleLock.lock();
-        try
+        if (closeLock.tryLock())
         {
-            if (closed)
-                return;
-
-            fileAccess.close();
-            closed = true;
-        } finally
-        {
-            recycleLock.unlock();
-        }
-
-    }
-
-    private void write(int count, long time)
-    {
-        try
-        {
-            if (writeFilter.shouldWrite(count, time))
+            try
             {
-                write(count, time, 1);
-            }
-        } catch (Exception e)
-        {
-            log.error("Error occurred during writing to log file. Disabling writing to file.", e);
-            close();
-        }
-    }
-
-    protected void write(int count, long time, int tries)
-    {
-        if (time >= nextCycleMillisTimestamp)
-        {
-            if (recycleLock.tryLock())
-            {
-                if (time < nextCycleMillisTimestamp)
+                if (closed)
                     return;
 
-                log.debug("Current time ({} ms) exceeds cycle limit ({} ms). Recycling file...", time, nextCycleMillisTimestamp);
-                try
-                {
-                    this.fileAccess.close();
-                    initializeFileAccess(queueConfiguration);
-                } finally
-                {
-                    recycleLock.unlock();
-                }
-                if (tries > 3)
-                {
-                    throw new IllegalStateException("Cannot recycle file");
-                }
-                write(count, time, tries + 1);
+                closed = true;
+                fileAccessWorker.close(fileAccessId);
+            } finally
+            {
+                closeLock.unlock();
             }
-            // drop writes during recycle
-        } else
-        {
-            fileAccess.writeProbe(count, time);
         }
-    }
-
-    // only for testing
-    public void setFileCycleClock(Clock fileCycleClock)
-    {
-        this.queueConfiguration = queueConfiguration.withFileCycleClock(fileCycleClock);
     }
 }
