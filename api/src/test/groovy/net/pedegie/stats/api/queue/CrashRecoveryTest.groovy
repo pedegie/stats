@@ -40,12 +40,10 @@ class CrashRecoveryTest extends Specification
         when: "we put elements"
             (0..(crashOnElement)).forEach { queue.add(5) }
         then: "there are probes in file but last one is missing timestamp"
+            sleep(1000)
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             byte[] bytes = Files.readAllBytes(logFile)
-            bytes.length == expectedBytes
-            byte[] expectedEmptyBytes = new byte[4]
-            Arrays.fill(expectedEmptyBytes, 0 as byte)
-            Arrays.copyOfRange(bytes, bytes.length - 4, bytes.length) == expectedEmptyBytes
+            bytes.length == halfProbeSize
         when: "we create queue one more time, with normal (non-crashing) probe writer"
             queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
@@ -64,6 +62,8 @@ class CrashRecoveryTest extends Specification
             bytes2.limit() == expectedBytes
             bytes2.getLong(bytes2.limit() - crashingProbeWriter.probeSize()) != 0
         where:
+            halfProbeSize << [4, 12,
+                              28, 28]
             expectedBytes << [12, 16,
                               36, 32]
             crashOnElement << [1, 1,
@@ -87,10 +87,10 @@ class CrashRecoveryTest extends Specification
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we try to put first element"
             queue.add(5)
-        then: "there is one empty probe"
+        then: "file is empty (contains only metadata) due crash on first probe write"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             byte[] bytes = Files.readAllBytes(logFile)
-            bytes.length == expectedBytes
+            bytes.length == metadataByes
         when: "we create queue one more time, with normal (non-crashing) probe writer"
             queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
@@ -109,6 +109,7 @@ class CrashRecoveryTest extends Specification
             bytes2.limit() == expectedBytes
             bytes2.getLong(bytes2.limit() - crashingProbeWriter.probeSize()) != 0
         where:
+            metadataByes << [0, 8]
             expectedBytes << [12, 16]
             crashingProbeWriter << [new CrashingProbes.DefaultCrashingProbeWriter(-1), new CrashingProbes.CompressedCrashingProbeWriter(time, -1)]
             probeWriter << [ProbeWriter.defaultProbeWriter(), ProbeWriter.compressedProbeWriter(time)]

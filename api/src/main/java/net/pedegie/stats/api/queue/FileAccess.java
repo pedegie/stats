@@ -1,177 +1,158 @@
 package net.pedegie.stats.api.queue;
 
+import gnu.trove.map.TIntObjectMap;
+import gnu.trove.map.hash.TIntObjectHashMap;
 import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
-import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
+import net.openhft.chronicle.core.Jvm;
 
-import java.io.Closeable;
-import java.io.RandomAccessFile;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.file.Path;
-import java.util.concurrent.locks.Lock;
-import java.util.function.Function;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 
-@FieldDefaults(level = AccessLevel.PROTECTED, makeFinal = true)
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
-class FileAccess implements Closeable
+class FileAccess
 {
-    Lock resizeLock;
-    ProbeWriter probeWriter;
-    @Getter
-    long startCycleMillis;
+    static int CLOSE_FILE_ID = -1;
+    static int CLOSE_ALL_FILES_ID = -2;
 
-    @NonFinal
-    volatile RandomAccessFile fileAccess;
-    @NonFinal
-    volatile ByteBuffer mappedFileBuffer;
-    @NonFinal
-    volatile FileChannel channel;
+    Executor pool = Executors.newSingleThreadExecutor();
+    TIntObjectMap<FileAccessContext> files;
 
-    Counter bufferOffset;
+    Counter idSequence;
 
-    @Getter
-    Path filePath;
-    int mmapSize;
-    int bufferLimit;
-    boolean unmapOnClose;
-    @NonFinal
-    volatile long fileSize;
-
-    @NonFinal
-    int resizes;
-
-    @Builder
-    FileAccess(Path filePath, int mmapSize, Function<FileAccessContext, ProbeWriter> probeWriterFactory, long startCycleMillis, Synchronizer synchronizer, boolean unmapOnClose)
+    FileAccess()
     {
-        log.info("Creating {}", filePath.toString());
-        FileUtils.createFile(filePath);
-        this.filePath = filePath;
-        this.mmapSize = mmapSize;
-        this.startCycleMillis = startCycleMillis;
-        this.mappedFileBuffer = mmap(this.filePath, this.fileSize, this.mmapSize);
-        this.bufferLimit = this.mappedFileBuffer.limit();
-        this.unmapOnClose = unmapOnClose;
-        this.resizeLock = synchronizer.newLock();
-        this.bufferOffset = synchronizer.newCounter();
-
-        var accessContext = new FileAccessContext(mappedFileBuffer, bufferOffset, filePath);
-        this.probeWriter = probeWriterFactory.apply(accessContext);
-        PreToucher.preTouch(mappedFileBuffer);
+        files = new TIntObjectHashMap<>(8);
+        idSequence = Synchronizer.CONCURRENT.newCounter();
     }
 
-    public void writeProbe(int probe, long timestamp)
+    public void writeProbe(Probe probe)
     {
-        int nextProbeOffset = nextOffset();
-        int offsetAfterWriting = nextProbeOffset + probeWriter.probeSize();
-        if (offsetAfterWriting > bufferLimit || offsetAfterWriting < 0)
-        {
-            if (resizeLock.tryLock())
-            {
-                if (!needResize())
-                    return;
+        var fileAccess = files.get(probe.getAccessId());
 
-                resizes++;
-                log.debug("Next offset ({}) exceeds current bufferLimit ({}). Resizing mmaped file...", nextProbeOffset + probeWriter.probeSize(), bufferLimit);
-                try
+        if (fileAccess == null)
+            return;
+
+        try
+        {
+            if (isCloseFileMessage(probe))
+            {
+                closeFile(files.remove(probe.getAccessId()));
+            } else if (fileAccess.writesEnabled())
+            {
+                if (needRecycle(fileAccess, probe))
                 {
-                    resize();
-                    log.debug("mmaped file resized, resizes: {}.", resizes);
-                } finally
+                    recycle(fileAccess, probe.getAccessId());
+                } else if (fileAccess.needResize())
                 {
-                    resizeLock.unlock();
+                    resize(fileAccess);
+                } else
+                {
+                    fileAccess.writeProbe(probe);
                 }
             }
-            // drop probes during resize
-        } else
+            // drop probes during recycle or resize
+        } catch (Exception e)
         {
-            resizeLock.lock();
-            probeWriter.writeProbe(mappedFileBuffer, nextProbeOffset, probe, timestamp);
-            resizeLock.unlock();
+            log.error("Closing file access due to error while processing probe: " + probe, e);
+            closeFile(files.remove(probe.getAccessId()));
         }
     }
 
-    private boolean needResize()
+    private boolean needRecycle(FileAccessContext fileAccess, Probe probe)
     {
-        int offset = bufferOffset.get() + probeWriter.probeSize();
-        return offset >= bufferLimit || offset < 0;
+        return probe.getTimestamp() >= fileAccess.getNextCycleTimestampMillis();
     }
 
-    private void resize()
+    private void closeFile(FileAccessContext accessContext)
     {
-        this.fileSize += bufferLimit - (bufferLimit % probeWriter.probeSize());
-        close(fileSize);
-        this.mappedFileBuffer = mmap(filePath, fileSize, mmapSize);
-        PreToucher.preTouch(mappedFileBuffer);
-        this.bufferOffset.set(0);
-    }
-
-    @SneakyThrows
-    private ByteBuffer mmap(Path filePath, long offset, int size)
-    {
-        this.fileAccess = new RandomAccessFile(filePath.toFile(), "rw");
-        this.channel = fileAccess.getChannel();
-        return channel.map(FileChannel.MapMode.READ_WRITE, offset, size);
-    }
-
-    private int nextOffset()
-    {
-        return bufferOffset.getAndAdd(probeWriter.probeSize());
-    }
-
-    @Override
-    public void close()
-    {
-        withinResizeLock(() -> close(fileSize + bufferOffset.get()));
-    }
-
-    @SneakyThrows
-    private void close(long truncate)
-    {
-        withinResizeLock(() -> close1(truncate));
-    }
-
-    @SneakyThrows
-    private void close1(long truncate)
-    {
-        if (closed())
+        while (!accessContext.writesEnabled())
         {
-            return;
+            busyWait(1e3);
         }
 
-        channel.truncate(truncate);
-        fileAccess.close();
-
-        fileAccess = null;
-        mappedFileBuffer = null;
-        channel = null;
-
-        if (unmapOnClose)
+        asyncWork(accessContext, () ->
         {
-            System.gc();
-        }
+            accessContext.close();
+            return null;
+        });
     }
 
-    private boolean closed()
+    private boolean isCloseFileMessage(Probe probe)
     {
-        return fileAccess == null;
+        return CLOSE_FILE_ID == probe.getProbe();
     }
 
-    private void withinResizeLock(Runnable action)
+    public CompletableFuture<Integer> registerFile(QueueConfiguration conf)
     {
-        resizeLock.lock();
+        return CompletableFuture.supplyAsync(() ->
         {
-            try
+            var accessContext = FileAccessStrategy.fileAccess(conf);
+            var id = idSequence.incrementAndGet();
+            files.put(id, accessContext);
+            accessContext.enableWrites();
+            return id;
+        }, pool);
+    }
+
+    private void recycle(FileAccessContext fileAccess, int accessId)
+    {
+        asyncWork(fileAccess, () ->
+        {
+            fileAccess.close();
+            var accessContext = FileAccessStrategy.fileAccess(fileAccess.getQueueConfiguration());
+            files.put(accessId, accessContext);
+            return null;
+        });
+    }
+
+    private void resize(FileAccessContext fileAccess)
+    {
+        asyncWork(fileAccess, () ->
+        {
+            fileAccess.close();
+            fileAccess.mmapNextSlice();
+            return null;
+        });
+    }
+
+    private void asyncWork(FileAccessContext fileAccess, Supplier<Void> work)
+    {
+        fileAccess.disableWrites();
+        CompletableFuture.supplyAsync(() ->
+        {
+            work.get();
+            PreToucher.preTouch(fileAccess.getBuffer());
+            fileAccess.enableWrites();
+            return null;
+        }, pool);
+    }
+
+    public void closeAll()
+    {
+        files.forEachValue(accessContext ->
+        {
+            while (!accessContext.writesEnabled())
             {
-                action.run();
-            } finally
-            {
-                resizeLock.unlock();
+                busyWait(1e3);
             }
+            accessContext.close();
+            return true;
+        });
+
+        files.clear();
+    }
+
+    private static void busyWait(double nanos)
+    {
+        long start = System.nanoTime();
+        while (System.nanoTime() - start < nanos)
+        {
+            Jvm.safepoint();
         }
     }
 }

@@ -22,15 +22,10 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
         if (itsNewFile(timestamp))
         {
             timestamp = startCycleTimestamp;
-            var offset = accessContext.getBufferOffset().getAndAdd(HEADER_SIZE);
-            if (offset != 0)
-            {
-                throw new IllegalStateException("Unexpected offset incrementation during initialization, offset is: " + offset + ", should be 0");
-            }
-
             long timestampWithFirstBitSetIndicatingItsCompressedFile = timestamp | Long.MIN_VALUE;
-            accessContext.getBuffer().putLong(0, timestampWithFirstBitSetIndicatingItsCompressedFile);
-            accessContext.seekTo(HEADER_SIZE);
+
+            accessContext.getBuffer().putLong(timestampWithFirstBitSetIndicatingItsCompressedFile);
+            assert accessContext.getBuffer().position() == HEADER_SIZE;
             log.debug("Initialized new compressed file {}, starting at offset: {} with timestamp: {}", accessContext.getFileName(), 0, startCycleTimestamp);
         } else
         {
@@ -49,7 +44,7 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
 
             log.debug("Recover");
             var index = CrashRecovery.recover(accessContext, this);
-            accessContext.seekTo(Math.max(index, HEADER_SIZE));
+            accessContext.getBuffer().position(Math.max(index, HEADER_SIZE));
             log.debug("Found compressed file {}, appending to index: {}", accessContext.getFileName(), index);
         }
         this.startCycleTimestamp = startCycleTimestamp;
@@ -62,18 +57,16 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
     }
 
     @Override
-    public void writeProbe(ByteBuffer buffer, int offset, int probe, long timestamp)
+    public void writeProbe(ByteBuffer buffer, Probe probe)
     {
-        if (probe == 0)
-            probe |= Integer.MIN_VALUE;
-
-        var adjustedTimestamp = (int) (timestamp - startCycleTimestamp);
+        var value = probe.getProbe() == 0 ? (probe.getProbe() | Integer.MIN_VALUE) : probe.getProbe();
+        var adjustedTimestamp = (int) (probe.getTimestamp() - startCycleTimestamp);
 
         if (adjustedTimestamp == 0)
             adjustedTimestamp |= Integer.MIN_VALUE;
 
-        buffer.putInt(offset, probe);
-        buffer.putInt(offset + PROBE_SIZE, adjustedTimestamp);
+        buffer.putInt(value);
+        buffer.putInt(adjustedTimestamp);
     }
 
     @Override
