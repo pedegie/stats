@@ -96,6 +96,7 @@ class RecyclerTest extends Specification
             queue.add(5)
             queue.add(5)
             queue.close()
+            sleep(1000)
         then: "there are two elements in file"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Files.readAllBytes(logFile).length == probeSize * 2 + headerSize
@@ -112,6 +113,7 @@ class RecyclerTest extends Specification
         and: "we put 3rd element"
             queue.add(5)
             queue.close()
+            sleep(1000)
             logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
         then: "there are 3 elements in file"
             Files.readAllBytes(logFile).length == probeSize * 3 + headerSize
