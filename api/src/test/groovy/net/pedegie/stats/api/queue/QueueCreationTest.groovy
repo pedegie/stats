@@ -27,6 +27,7 @@ class QueueCreationTest extends Specification
         given:
             Path nestedFilePath = Paths.get(System.getProperty("java.io.tmpdir"), "dir1", "dir2", "stats_queue.log")
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .mmapSize(OS.pageSize())
                     .path(nestedFilePath)
                     .build()
             FileUtils.cleanDirectory(nestedFilePath.getParent())
@@ -58,6 +59,7 @@ class QueueCreationTest extends Specification
         given:
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .fileCycleDuration(Duration.of(59, ChronoUnit.SECONDS))
                     .build()
         when:
@@ -114,6 +116,7 @@ class QueueCreationTest extends Specification
         given: "queue"
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .disableCompression(compressionDisabled)
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)

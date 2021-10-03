@@ -3,18 +3,18 @@ package net.pedegie.stats.api.queue;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.experimental.FieldDefaults;
-import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
+import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.annotation.ForceInline;
 import net.pedegie.stats.api.tailer.Tailer;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Closeable;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
@@ -27,8 +27,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     Counter count;
     Lock closeLock;
     WriteFilter writeFilter;
-    @NonFinal
-    volatile boolean closed;
+    AtomicBoolean closed;
     private final int fileAccessId;
 
     @Builder
@@ -41,7 +40,11 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         this.count = queueConfiguration.getSynchronizer().newCounter();
         this.closeLock = queueConfiguration.getSynchronizer().newLock();
         this.fileCycleClock = queueConfiguration.getFileCycleClock();
-        this.fileAccessId = fileAccessWorker.registerFile(queueConfiguration).join(); // todo timeout
+        fileAccessWorker.start();
+        var registerResult = fileAccessWorker.registerFile(queueConfiguration).join(); // todo timeout
+        this.fileAccessId = registerResult.getA();
+        this.closed = registerResult.getB();
+
     }
 
     private void logConfiguration(QueueConfiguration conf)
@@ -95,7 +98,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean add(T t)
     {
         boolean added = queue.add(t);
-        if (!closed && added)
+        if (!closed.get() && added)
         {
             int count = this.count.incrementAndGet();
             long time = time();
@@ -108,7 +111,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean remove(Object o)
     {
         boolean removed = queue.remove(o);
-        if (!closed && removed)
+        if (!closed.get() && removed)
         {
             int count = this.count.decrementAndGet();
             long time = time();
@@ -127,7 +130,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean addAll(@NotNull Collection<? extends T> c)
     {
         boolean added = queue.addAll(c);
-        if (!closed && added)
+        if (!closed.get() && added)
         {
             int count = this.count.addAndGet(c.size());
             long time = time();
@@ -140,7 +143,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean removeAll(@NotNull Collection<?> c)
     {
         boolean removed = queue.removeAll(c);
-        if (!closed && removed)
+        if (!closed.get() && removed)
         {
             setAndWriteCurrentSize();
         }
@@ -151,7 +154,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean retainAll(@NotNull Collection<?> c)
     {
         boolean retained = queue.retainAll(c);
-        if (!closed && retained)
+        if (!closed.get() && retained)
         {
             setAndWriteCurrentSize();
         }
@@ -171,7 +174,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public void clear()
     {
         queue.clear();
-        if (!closed)
+        if (!closed.get())
         {
             count.set(0);
             long time = time();
@@ -183,7 +186,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean offer(T t)
     {
         boolean offered = queue.offer(t);
-        if (!closed && offered)
+        if (!closed.get() && offered)
         {
             int count = this.count.incrementAndGet();
             long time = time();
@@ -196,7 +199,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public T remove()
     {
         T removed = queue.remove();
-        if (!closed)
+        if (!closed.get())
         {
             int count = this.count.decrementAndGet();
             long time = time();
@@ -209,7 +212,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public T poll()
     {
         T polled = queue.poll();
-        if (!closed && polled != null)
+        if (!closed.get() && polled != null)
         {
             int count = this.count.decrementAndGet();
             long time = time();
@@ -246,29 +249,51 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     @Override
     public void close()
     {
-        close(() -> fileAccessWorker.close(fileAccessId));
-    }
-
-    public void closeBlocking()
-    {
-        close(() -> fileAccessWorker.closeBlocking(fileAccessId));
-    }
-
-    private void close(Runnable closeAction)
-    {
         if (closeLock.tryLock())
         {
             try
             {
-                if (closed)
+                if (closed.get())
                     return;
 
-                closed = true;
-                closeAction.run();
+                fileAccessWorker.close(fileAccessId);
             } finally
             {
                 closeLock.unlock();
             }
+        }
+    }
+
+    public void closeBlocking()
+    {
+        close();
+        while (!closed.get())
+        {
+            busyWait(2e3);
+        }
+    }
+
+    public boolean isClosed()
+    {
+        return closed.get();
+    }
+
+    public static void shutdown()
+    {
+        fileAccessWorker.shutdown();
+    }
+
+    public static void shutdownForce()
+    {
+        fileAccessWorker.shutdownForce();
+    }
+
+    private static void busyWait(double nanos)
+    {
+        long start = System.nanoTime();
+        while (System.nanoTime() - start < nanos)
+        {
+            Jvm.safepoint();
         }
     }
 }

@@ -1,5 +1,6 @@
 package net.pedegie.stats.api.queue
 
+import net.openhft.chronicle.core.OS
 import spock.lang.Specification
 
 import java.nio.file.Files
@@ -28,6 +29,7 @@ class CompressedFileAccessTest extends Specification
         given:
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
@@ -46,6 +48,7 @@ class CompressedFileAccessTest extends Specification
         given:
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .fileCycleDuration(Duration.of(30, ChronoUnit.DAYS))
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
@@ -66,6 +69,7 @@ class CompressedFileAccessTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .disableCompression(true)
+                    .mmapSize(OS.pageSize())
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when:
@@ -88,6 +92,7 @@ class CompressedFileAccessTest extends Specification
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .fileCycleClock(Clock.fixed(now.toInstant(), ZoneId.of("UTC")))
                     .disableCompression(true)
+                    .mmapSize(OS.pageSize())
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put 3 elements"
@@ -103,6 +108,7 @@ class CompressedFileAccessTest extends Specification
                     .builder()
                     .path(TestQueueUtil.PATH)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
+                    .mmapSize(OS.pageSize())
                     .fileCycleClock(Clock.fixed(now.toInstant(), ZoneId.of("UTC")))
                     .build()
             queue = TestQueueUtil.createQueue(queueConfiguration)

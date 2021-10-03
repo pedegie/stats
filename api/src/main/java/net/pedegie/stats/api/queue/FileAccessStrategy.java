@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 @Slf4j
@@ -13,6 +14,11 @@ class FileAccessStrategy
     private static final int MB_500 = 1024 * 1024 * 512;
 
     public static FileAccessContext fileAccess(QueueConfiguration configuration)
+    {
+        return fileAccess(configuration, new AtomicBoolean());
+    }
+
+    public static FileAccessContext fileAccess(QueueConfiguration configuration, AtomicBoolean terminated)
     {
         var offsetDateTime = newFileOffset(configuration);
         var fileName = PathDateFormatter.appendDate(configuration.getPath(), offsetDateTime);
@@ -28,6 +34,7 @@ class FileAccessStrategy
                 .probeWriter(probeWriter)
                 .nextCycleTimestampMillis(nextCycleTimestampMillis)
                 .queueConfiguration(configuration)
+                .terminated(terminated)
                 .build();
     }
 

@@ -10,6 +10,7 @@ import net.openhft.chronicle.core.Jvm;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -17,9 +18,6 @@ import java.util.function.Supplier;
 class FileAccess
 {
     static int CLOSE_FILE_MESSAGE_ID = -1;
-    static int CLOSE_FILE_SYNC_MESSAGE_ID = -10;
-
-    static int CLOSE_ALL_FILES_MESSAGE_ID = -2;
 
     Executor pool = Executors.newSingleThreadExecutor();
     TIntObjectMap<FileAccessContext> files;
@@ -81,20 +79,17 @@ class FileAccess
         asyncWork(accessContext, () ->
         {
             accessContext.close();
-            if (probe.getProbe() > 0 || probe.getProbe() == CLOSE_FILE_SYNC_MESSAGE_ID)
-            {
-                FileAccessWorker.closedFiles.put(probe.getAccessId(), true);
-            }
+            accessContext.terminate();
             return accessContext;
         });
     }
 
     private boolean isCloseFileMessage(Probe probe)
     {
-        return CLOSE_FILE_MESSAGE_ID == probe.getProbe() || CLOSE_FILE_SYNC_MESSAGE_ID == probe.getProbe();
+        return CLOSE_FILE_MESSAGE_ID == probe.getProbe();
     }
 
-    public CompletableFuture<Integer> registerFile(QueueConfiguration conf)
+    public CompletableFuture<Tuple<Integer, AtomicBoolean>> registerFile(QueueConfiguration conf)
     {
         return CompletableFuture.supplyAsync(() ->
         {
@@ -103,7 +98,7 @@ class FileAccess
             var id = idSequence.incrementAndGet();
             files.put(id, accessContext);
             accessContext.enableWrites();
-            return id;
+            return new Tuple<>(id, accessContext.getTerminated());
         }, pool);
     }
 
@@ -112,7 +107,7 @@ class FileAccess
         asyncWork(fileAccess, () ->
         {
             fileAccess.close();
-            var accessContext = FileAccessStrategy.fileAccess(fileAccess.getQueueConfiguration());
+            var accessContext = FileAccessStrategy.fileAccess(fileAccess.getQueueConfiguration(), fileAccess.getTerminated());
             PreToucher.preTouch(accessContext.getBuffer());
             files.put(probe.getAccessId(), accessContext);
             accessContext.writeProbe(probe);
@@ -140,7 +135,11 @@ class FileAccess
             var accessContext = work.get();
             accessContext.enableWrites();
             return null;
-        }, pool).exceptionally(throwable -> {log.error("", throwable); return null;});
+        }, pool).exceptionally(throwable ->
+        {
+            log.error("", throwable);
+            return null;
+        });
     }
 
     public void closeAll()
@@ -152,6 +151,7 @@ class FileAccess
                 busyWait(1e3);
             }
             accessContext.close();
+            accessContext.terminate();
             return true;
         });
 

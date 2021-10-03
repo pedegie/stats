@@ -1,5 +1,6 @@
 package net.pedegie.stats.api.queue
 
+import net.openhft.chronicle.core.OS
 import spock.lang.Specification
 import spock.lang.Unroll
 
@@ -33,6 +34,7 @@ class RecyclerTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration
                     .builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .fileCycleDuration(fileCycleDuration)
                     .fileCycleClock(Clock.fixed(now.toInstant(), ZoneId.of("UTC")))
                     .build()
@@ -85,6 +87,7 @@ class RecyclerTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration
                     .builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
                     .disableCompression(disableCompression)
@@ -102,6 +105,7 @@ class RecyclerTest extends Specification
             queueConfiguration = QueueConfiguration
                     .builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
                     .disableCompression(disableCompression)
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
@@ -127,6 +131,7 @@ class RecyclerTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration
                     .builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
                     .fileCycleClock(spyClock)
                     .disableCompression(disableCompression)

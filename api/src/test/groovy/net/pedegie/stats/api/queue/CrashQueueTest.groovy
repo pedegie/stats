@@ -40,6 +40,6 @@ class CrashQueueTest extends Specification
         where:
             disableCompression << [true, false]
             halfProbeSize << [4, 12]
-            probeWriter << [new CrashingProbes.DefaultCrashingProbeWriter(1), new CrashingProbes.CompressedCrashingProbeWriter(ZonedDateTime.now(), 1)]
+            probeWriter << [new ProbeWriters.DefaultCrashingProbeWriter(1), new ProbeWriters.CompressedCrashingProbeWriter(ZonedDateTime.now(), 1)]
     }
 }

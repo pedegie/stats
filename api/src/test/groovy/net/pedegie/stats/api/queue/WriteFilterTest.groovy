@@ -1,11 +1,10 @@
 package net.pedegie.stats.api.queue
 
-
+import net.openhft.chronicle.core.OS
 import spock.lang.Specification
 
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.ConcurrentLinkedQueue
 
 class WriteFilterTest extends Specification
 {
@@ -24,6 +23,7 @@ class WriteFilterTest extends Specification
         given: "write filter which writes only when queue size is larger than 3"
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .disableCompression(true)
                     .writeFilter(WriteFilter.acceptWhenSizeHigherThan(3))
                     .build()
@@ -44,6 +44,7 @@ class WriteFilterTest extends Specification
         given: "write filter which accept all (default)"
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .disableCompression(true)
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)

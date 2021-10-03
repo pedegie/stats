@@ -1,5 +1,6 @@
 package net.pedegie.stats.api.queue
 
+import net.openhft.chronicle.core.OS
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -31,6 +32,7 @@ class CrashRecoveryTest extends Specification
         given: "Crashing probe writer"
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .probeWriter(crashingProbeWriter)
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
@@ -47,6 +49,7 @@ class CrashRecoveryTest extends Specification
         when: "we create queue one more time, with normal (non-crashing) probe writer"
             queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .probeWriter(probeWriter)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
@@ -68,8 +71,8 @@ class CrashRecoveryTest extends Specification
                               36, 32]
             crashOnElement << [1, 1,
                                3, 3]
-            crashingProbeWriter << [new CrashingProbes.DefaultCrashingProbeWriter(1), new CrashingProbes.CompressedCrashingProbeWriter(time, 1),
-                                    new CrashingProbes.DefaultCrashingProbeWriter(3), new CrashingProbes.CompressedCrashingProbeWriter(time, 3)]
+            crashingProbeWriter << [new ProbeWriters.DefaultCrashingProbeWriter(1), new ProbeWriters.CompressedCrashingProbeWriter(time, 1),
+                                    new ProbeWriters.DefaultCrashingProbeWriter(3), new ProbeWriters.CompressedCrashingProbeWriter(time, 3)]
             probeWriter << [ProbeWriter.defaultProbeWriter(), ProbeWriter.compressedProbeWriter(time),
                             ProbeWriter.defaultProbeWriter(), ProbeWriter.compressedProbeWriter(time)]
     }
@@ -79,6 +82,7 @@ class CrashRecoveryTest extends Specification
         given: "Crashing probe writer"
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .probeWriter(crashingProbeWriter)
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
@@ -87,6 +91,7 @@ class CrashRecoveryTest extends Specification
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we try to put first element"
             queue.add(5)
+            queue.closeBlocking()
         then: "file is empty (contains only metadata) due crash on first probe write"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             byte[] bytes = Files.readAllBytes(logFile)
@@ -94,6 +99,7 @@ class CrashRecoveryTest extends Specification
         when: "we create queue one more time, with normal (non-crashing) probe writer"
             queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .probeWriter(probeWriter)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
@@ -111,7 +117,7 @@ class CrashRecoveryTest extends Specification
         where:
             metadataByes << [0, 8]
             expectedBytes << [12, 16]
-            crashingProbeWriter << [new CrashingProbes.DefaultCrashingProbeWriter(-1), new CrashingProbes.CompressedCrashingProbeWriter(time, -1)]
+            crashingProbeWriter << [new ProbeWriters.DefaultCrashingProbeWriter(-1), new ProbeWriters.CompressedCrashingProbeWriter(time, -1)]
             probeWriter << [ProbeWriter.defaultProbeWriter(), ProbeWriter.compressedProbeWriter(time)]
     }
 }

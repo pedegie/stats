@@ -1,6 +1,6 @@
 package net.pedegie.stats.api.queue
 
-
+import net.openhft.chronicle.core.OS
 import spock.lang.Specification
 
 import java.util.concurrent.ArrayBlockingQueue
@@ -192,6 +192,7 @@ class StatsQueueTest extends Specification
         QueueConfiguration queueConfiguration = QueueConfiguration
                 .builder()
                 .path(TestQueueUtil.PATH)
+                .mmapSize(OS.pageSize())
                 .build()
 
         return StatsQueue.<Integer> builder()
