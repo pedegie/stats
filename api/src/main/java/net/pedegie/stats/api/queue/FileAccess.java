@@ -10,14 +10,14 @@ import net.openhft.chronicle.core.Jvm;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 class FileAccess
 {
-    static int CLOSE_FILE_ID = -1;
-    static int CLOSE_ALL_FILES_ID = -2;
+    static int CLOSE_FILE_MESSAGE_ID = -1;
 
     Executor pool = Executors.newSingleThreadExecutor();
     TIntObjectMap<FileAccessContext> files;
@@ -41,25 +41,24 @@ class FileAccess
         {
             if (isCloseFileMessage(probe))
             {
-                closeFile(files.remove(probe.getAccessId()));
+                closeFile(probe);
             } else if (fileAccess.writesEnabled())
             {
                 if (needRecycle(fileAccess, probe))
                 {
-                    recycle(fileAccess, probe.getAccessId());
+                    recycle(fileAccess, probe);
                 } else if (fileAccess.needResize())
                 {
-                    resize(fileAccess);
+                    resize(fileAccess, probe);
                 } else
                 {
                     fileAccess.writeProbe(probe);
                 }
             }
-            // drop probes during recycle or resize
         } catch (Exception e)
         {
             log.error("Closing file access due to error while processing probe: " + probe, e);
-            closeFile(files.remove(probe.getAccessId()));
+            closeFile(probe);
         }
     }
 
@@ -68,68 +67,93 @@ class FileAccess
         return probe.getTimestamp() >= fileAccess.getNextCycleTimestampMillis();
     }
 
-    private void closeFile(FileAccessContext accessContext)
+    private void closeFile(Probe probe)
     {
-        while (!accessContext.writesEnabled())
+        while(true)
         {
-            busyWait(1e3);
+            var context = files.get(probe.getAccessId());
+            if(context.getTerminated().get())
+                return;
+
+            if(context.writesEnabled())
+                break;
+            else
+                busyWait(1e3);
         }
+
+        var accessContext = files.remove(probe.getAccessId());
+
+        if(accessContext.getTerminated().get())
+            return;
 
         asyncWork(accessContext, () ->
         {
             accessContext.close();
-            return null;
+            accessContext.terminate();
+            return accessContext;
         });
     }
 
     private boolean isCloseFileMessage(Probe probe)
     {
-        return CLOSE_FILE_ID == probe.getProbe();
+        return CLOSE_FILE_MESSAGE_ID == probe.getProbe();
     }
 
-    public CompletableFuture<Integer> registerFile(QueueConfiguration conf)
+    public CompletableFuture<Tuple<Integer, AtomicBoolean>> registerFile(QueueConfiguration conf)
     {
         return CompletableFuture.supplyAsync(() ->
         {
             var accessContext = FileAccessStrategy.fileAccess(conf);
+            PreToucher.preTouch(accessContext.getBuffer());
             var id = idSequence.incrementAndGet();
             files.put(id, accessContext);
             accessContext.enableWrites();
-            return id;
-        }, pool);
-    }
-
-    private void recycle(FileAccessContext fileAccess, int accessId)
-    {
-        asyncWork(fileAccess, () ->
+            return new Tuple<>(id, accessContext.getTerminated());
+        }, pool).exceptionally(throwable ->
         {
-            fileAccess.close();
-            var accessContext = FileAccessStrategy.fileAccess(fileAccess.getQueueConfiguration());
-            files.put(accessId, accessContext);
+            log.error("", throwable);
             return null;
         });
     }
 
-    private void resize(FileAccessContext fileAccess)
+    private void recycle(FileAccessContext fileAccess, Probe probe)
+    {
+        asyncWork(fileAccess, () ->
+        {
+            fileAccess.close();
+            var accessContext = FileAccessStrategy.fileAccess(fileAccess.getQueueConfiguration(), fileAccess.getTerminated());
+            PreToucher.preTouch(accessContext.getBuffer());
+            files.put(probe.getAccessId(), accessContext);
+            accessContext.writeProbe(probe);
+            return accessContext;
+        });
+    }
+
+    private void resize(FileAccessContext fileAccess, Probe probe)
     {
         asyncWork(fileAccess, () ->
         {
             fileAccess.close();
             fileAccess.mmapNextSlice();
-            return null;
+            PreToucher.preTouch(fileAccess.getBuffer());
+            fileAccess.writeProbe(probe);
+            return fileAccess;
         });
     }
 
-    private void asyncWork(FileAccessContext fileAccess, Supplier<Void> work)
+    private void asyncWork(FileAccessContext fileAccess, Supplier<FileAccessContext> work)
     {
         fileAccess.disableWrites();
         CompletableFuture.supplyAsync(() ->
         {
-            work.get();
-            PreToucher.preTouch(fileAccess.getBuffer());
-            fileAccess.enableWrites();
+            var accessContext = work.get();
+            accessContext.enableWrites();
             return null;
-        }, pool);
+        }, pool).exceptionally(throwable ->
+        {
+            log.error("", throwable);
+            return null;
+        });
     }
 
     public void closeAll()
@@ -141,6 +165,7 @@ class FileAccess
                 busyWait(1e3);
             }
             accessContext.close();
+            accessContext.terminate();
             return true;
         });
 

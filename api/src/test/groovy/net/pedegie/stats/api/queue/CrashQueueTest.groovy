@@ -14,6 +14,11 @@ class CrashQueueTest extends Specification
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
+    def cleanup()
+    {
+        StatsQueue.shutdown()
+    }
+
     def cleanupSpec()
     {
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
@@ -29,11 +34,12 @@ class CrashQueueTest extends Specification
                     .disableCompression(disableCompression)
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
-        when: "we add 2 elements"
+        when: "we add first element"
             queue.add(5)
+        then: "it should close queue due crash"
+            waitUntilQueueIsClosedOrThrow(queue, 5)
+        when: "we put one more element"
             queue.add(5)
-            queue.close()
-            sleep(1000)
         then: "there is single broken element in file but two elements in decorated queue"
             queue.size() == 2
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
@@ -41,6 +47,23 @@ class CrashQueueTest extends Specification
         where:
             disableCompression << [true, false]
             halfProbeSize << [4, 12]
-            probeWriter << [new CrashingProbes.DefaultCrashingProbeWriter(1), new CrashingProbes.CompressedCrashingProbeWriter(ZonedDateTime.now(), 1)]
+            probeWriter << [new ProbeWriters.DefaultCrashingProbeWriter(1), new ProbeWriters.CompressedCrashingProbeWriter(ZonedDateTime.now(), 1)]
+    }
+
+    static boolean waitUntilQueueIsClosedOrThrow(StatsQueue<Integer> queue, int seconds)
+    {
+        int iterations = 0
+        int sleepMillis = 100
+
+        do
+        {
+            boolean closed = queue.isClosed()
+            if(closed)
+                return true
+            sleep(sleepMillis)
+            iterations += sleepMillis
+        } while (iterations < (seconds * 1000))
+
+        return false
     }
 }

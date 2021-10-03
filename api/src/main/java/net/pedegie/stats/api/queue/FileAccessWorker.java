@@ -10,6 +10,7 @@ import org.jctools.queues.MpscArrayQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
@@ -25,6 +26,7 @@ class FileAccessWorker implements Runnable
             AtomicIntegerFieldUpdater.newUpdater(FileAccessWorker.class, "isRunning");
 
     MpscArrayQueue<Probe> probes = new MpscArrayQueue<>(2 << 15);
+    @NonFinal
     FileAccess fileAccess;
 
     public FileAccessWorker()
@@ -33,14 +35,21 @@ class FileAccessWorker implements Runnable
         singleThreadPool.execute(this);
     }
 
-    @Override
-    public void run()
+    public void start()
     {
         if (isRunning())
         {
             return;
         }
+        log.info("STARTING FILE ACCESS WORKER");
 
+        fileAccess = new FileAccess();
+        singleThreadPool.execute(this);
+    }
+
+    @Override
+    public void run()
+    {
         runMainLoop();
 
         if (isForceShutdown())
@@ -55,7 +64,7 @@ class FileAccessWorker implements Runnable
         {
             fileAccess.writeProbe(probe);
         }
-
+        fileAccess.closeAll();
         setNonRunning();
     }
 
@@ -76,7 +85,7 @@ class FileAccessWorker implements Runnable
         probes.failFastOffer(probe);
     }
 
-    public CompletableFuture<Integer> registerFile(QueueConfiguration queueConfiguration)
+    public CompletableFuture<Tuple<Integer, AtomicBoolean>> registerFile(QueueConfiguration queueConfiguration)
     {
         return fileAccess.registerFile(queueConfiguration);
     }
@@ -84,17 +93,29 @@ class FileAccessWorker implements Runnable
     /**
      * Shutdowns worker after it finish processing all pending tasks on its queue
      */
-    private void shutdown()
+    public void shutdown()
     {
         isRunningFieldUpdater.compareAndSet(this, RUNNING, SHUTDOWN);
+        waitUntilTerminated();
     }
 
     /**
      * Shutdowns worker after it finish currently processing task. Pending tasks on queue are not handled
      */
-    private void shutdownForce()
+    public void shutdownForce()
     {
         isRunningFieldUpdater.compareAndSet(this, RUNNING, FORCE_SHUTDOWN);
+        waitUntilTerminated();
+    }
+
+    private void waitUntilTerminated()
+    {
+        while (isRunningFieldUpdater.get(this) != NOT_RUNNING)
+        {
+            busyWait(2e3);
+        }
+
+        fileAccess = null;
     }
 
     private void setNonRunning()
@@ -109,7 +130,7 @@ class FileAccessWorker implements Runnable
 
     private boolean isRunning()
     {
-        return isRunningFieldUpdater.getAndSet(this, RUNNING) == RUNNING;
+        return isRunningFieldUpdater.getAndSet(this, RUNNING) != NOT_RUNNING;
     }
 
     private boolean notClosed()
@@ -119,10 +140,14 @@ class FileAccessWorker implements Runnable
 
     public void close(int fileAccessId)
     {
-        var closeFileMessage = Probe.closeFileMessage(fileAccessId);
+        sendCloseFileMessage(Probe.closeFileMessage(fileAccessId));
+    }
+
+    private void sendCloseFileMessage(Probe closeFileMessage)
+    {
         while (!probes.offer(closeFileMessage))
         {
-            log.warn("Send queue full, cannot send close file message for {}", fileAccessId);
+            log.warn("Send queue full, cannot send close file message for {}", closeFileMessage.getAccessId());
             busyWait(1e3);
         }
     }

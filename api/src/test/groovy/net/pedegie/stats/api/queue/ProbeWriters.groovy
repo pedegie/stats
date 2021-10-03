@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.time.ZonedDateTime
 import java.util.function.Function
 
-class CrashingProbes
+class ProbeWriters
 {
     static class CompressedCrashingProbeWriter implements ProbeWriter, Function<FileAccessContext, ProbeWriter>
     {
@@ -94,6 +94,36 @@ class CrashingProbes
         ProbeWriter apply(FileAccessContext fileAccessContext)
         {
             return new DefaultCrashingProbeWriter(crashOnWrite)
+        }
+    }
+
+    static class DelayedProbeWriter implements ProbeWriter, Function<FileAccessContext, ProbeWriter>
+    {
+        private final int delaySeconds
+
+        DelayedProbeWriter(int delaySeconds)
+        {
+            this.delaySeconds = delaySeconds
+        }
+
+        @Override
+        void writeProbe(ByteBuffer buffer, Probe probe)
+        {
+            sleep(delaySeconds * 1000)
+            buffer.putInt(probe.probe)
+            buffer.putLong(1)
+        }
+
+        @Override
+        int probeSize()
+        {
+            return 12
+        }
+
+        @Override
+        ProbeWriter apply(FileAccessContext fileAccessContext)
+        {
+            return new DelayedProbeWriter(delaySeconds)
         }
     }
 }

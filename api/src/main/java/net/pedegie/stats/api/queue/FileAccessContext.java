@@ -11,15 +11,19 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 class FileAccessContext
 {
     private static final int BUSY = 1;
-    private static final int FREE = 1;
+    private static final int FREE = 0;
     @NonFinal
     volatile int state = BUSY;
+
+    @Getter
+    AtomicBoolean terminated;
 
     @Getter
     QueueConfiguration queueConfiguration;
@@ -42,7 +46,7 @@ class FileAccessContext
 
     @Builder
     private FileAccessContext(Path fileName, Function<FileAccessContext, ProbeWriter> probeWriter, long nextCycleTimestampMillis,
-                              QueueConfiguration queueConfiguration, int mmapSize)
+                              QueueConfiguration queueConfiguration, int mmapSize, AtomicBoolean terminated)
     {
         this.queueConfiguration = queueConfiguration;
         this.fileName = fileName;
@@ -50,6 +54,7 @@ class FileAccessContext
         this.mmapSize = mmapSize;
         mmapNextSlice();
         this.probeWriter = probeWriter.apply(this);
+        this.terminated = terminated;
     }
 
     public void writeProbe(Probe probe)
@@ -103,5 +108,10 @@ class FileAccessContext
         {
             System.gc();
         }
+    }
+
+    void terminate()
+    {
+        terminated.set(true);
     }
 }

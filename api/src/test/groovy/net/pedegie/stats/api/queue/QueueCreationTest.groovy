@@ -17,6 +17,11 @@ class QueueCreationTest extends Specification
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
+    def cleanup()
+    {
+        StatsQueue.shutdown()
+    }
+
     def cleanupSpec()
     {
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
@@ -27,6 +32,7 @@ class QueueCreationTest extends Specification
         given:
             Path nestedFilePath = Paths.get(System.getProperty("java.io.tmpdir"), "dir1", "dir2", "stats_queue.log")
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .mmapSize(OS.pageSize())
                     .path(nestedFilePath)
                     .build()
             FileUtils.cleanDirectory(nestedFilePath.getParent())
@@ -36,7 +42,7 @@ class QueueCreationTest extends Specification
             Files.newDirectoryStream(nestedFilePath.getParent())
                     .find { it.toAbsolutePath().toString().contains("stats_queue") } != null
         cleanup:
-            queue.close()
+            queue.closeBlocking()
             FileUtils.cleanDirectory(nestedFilePath.getParent())
     }
 
@@ -58,6 +64,7 @@ class QueueCreationTest extends Specification
         given:
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .fileCycleDuration(Duration.of(59, ChronoUnit.SECONDS))
                     .build()
         when:
@@ -114,13 +121,14 @@ class QueueCreationTest extends Specification
         given: "queue"
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
                     .disableCompression(compressionDisabled)
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put first element and then remove from queue"
             queue.add(5)
             queue.remove()
-            queue.close()
+            queue.closeBlocking()
         then: "there should be 2 elements"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer logFileBuffer = ByteBuffer.wrap(Files.readAllBytes(logFile))
@@ -130,7 +138,7 @@ class QueueCreationTest extends Specification
         when: "we create queue again and put there one element"
             queue = TestQueueUtil.createQueue(queueConfiguration)
             queue.add(5)
-            queue.close()
+            queue.closeBlocking()
         then: "it should have 3 elements"
             Path logFile2 = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer logFileBuffer2 = ByteBuffer.wrap(Files.readAllBytes(logFile2))
