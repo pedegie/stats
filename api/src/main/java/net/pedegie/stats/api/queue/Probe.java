@@ -12,7 +12,7 @@ import lombok.experimental.FieldDefaults;
 @ToString
 public class Probe
 {
-    private static final Probe CLOSE_ALL_FILES_MESSAGE = new Probe(0, FileAccess.CLOSE_ALL_FILES_ID, 0);
+    private static final Probe CLOSE_ALL_FILES_MESSAGE = new Probe(0, FileAccess.CLOSE_ALL_FILES_MESSAGE_ID, 0);
 
     int accessId;
     int probe;
@@ -20,7 +20,12 @@ public class Probe
 
     public static Probe closeFileMessage(int accessId)
     {
-        return new Probe(accessId, FileAccess.CLOSE_FILE_ID, 0);
+        return new Probe(accessId, FileAccess.CLOSE_FILE_MESSAGE_ID, 0);
+    }
+
+    public static Probe closeFileSyncMessage(int accessId)
+    {
+        return new Probe(accessId, FileAccess.CLOSE_FILE_SYNC_MESSAGE_ID, 0);
     }
 
     public static Probe closeAllFilesMessage()

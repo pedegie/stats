@@ -220,7 +220,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
 
     private long time()
     {
-        return Instant.now(fileCycleClock).toEpochMilli();
+        return fileCycleClock.millis();
     }
 
     @Override
@@ -246,6 +246,16 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     @Override
     public void close()
     {
+        close(() -> fileAccessWorker.close(fileAccessId));
+    }
+
+    public void closeBlocking()
+    {
+        close(() -> fileAccessWorker.closeBlocking(fileAccessId));
+    }
+
+    private void close(Runnable closeAction)
+    {
         if (closeLock.tryLock())
         {
             try
@@ -254,7 +264,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
                     return;
 
                 closed = true;
-                fileAccessWorker.close(fileAccessId);
+                closeAction.run();
             } finally
             {
                 closeLock.unlock();

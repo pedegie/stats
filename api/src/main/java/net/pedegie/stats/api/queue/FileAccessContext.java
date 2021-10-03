@@ -17,7 +17,7 @@ import java.util.function.Function;
 class FileAccessContext
 {
     private static final int BUSY = 1;
-    private static final int FREE = 1;
+    private static final int FREE = 0;
     @NonFinal
     volatile int state = BUSY;
 

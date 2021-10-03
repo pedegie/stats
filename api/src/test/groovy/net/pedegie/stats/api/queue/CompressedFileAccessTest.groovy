@@ -35,7 +35,7 @@ class CompressedFileAccessTest extends Specification
             queue.add(5)
             queue.add(5)
             queue.add(5)
-            queue.close()
+            queue.closeBlocking()
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Files.readAllBytes(logFile).length == 8 + CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
@@ -53,7 +53,7 @@ class CompressedFileAccessTest extends Specification
             queue.add(5)
             queue.add(5)
             queue.add(5)
-            queue.close()
+            queue.closeBlocking()
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
@@ -72,7 +72,7 @@ class CompressedFileAccessTest extends Specification
             queue.add(5)
             queue.add(5)
             queue.add(5)
-            queue.close()
+            queue.closeBlocking()
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
@@ -109,7 +109,7 @@ class CompressedFileAccessTest extends Specification
             queue.add(3)
             queue.add(3)
             queue.add(3)
-            queue.close()
+            queue.closeBlocking()
         then: "compression were disabled anyway"
             Path logFile2 = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Files.readAllBytes(logFile2).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 6

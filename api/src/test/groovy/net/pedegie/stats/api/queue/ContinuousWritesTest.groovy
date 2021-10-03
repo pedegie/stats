@@ -30,23 +30,20 @@ class ContinuousWritesTest extends Specification
                     .build()
 
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
-            int[] elementsToFillWholeBuffer = allocate(queueConfiguration, probeSize)
+            int[] elementsToFillWholeBuffer = allocate(queueConfiguration, probeSize, headerSize)
 
         when: "we put one element more than mmap size"
             elementsToFillWholeBuffer.each { queue.add(it) }
             queue.add(5)
-            sleep(1000)
-        and: "we put one more element due to dropped previous one on resize"
-            queue.add(5)
-            queue.close()
-            sleep(1000)
+            queue.closeBlocking()
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
-            probes.getInt(probes.limit() - probeSize) == elementsToFillWholeBuffer.length + 2
+            probes.getInt(probes.limit() - probeSize) == elementsToFillWholeBuffer.length + 1
         where:
             disableCompression << [true, false]
             probeSize << [DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM, CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM]
+            headerSize << [0, CompressedProbeWriter.HEADER_SIZE]
     }
 
     def "should be able to append to log file when whole mmaped memory is dirty"()
@@ -64,8 +61,7 @@ class ContinuousWritesTest extends Specification
             range.forEach {
                 queue.add(it.intValue())
             }
-            queue.close()
-            sleep(1000)
+            queue.closeBlocking()
         then:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
@@ -73,10 +69,8 @@ class ContinuousWritesTest extends Specification
         when: "we put two more probes, because of one is dropped during resize"
             queue = TestQueueUtil.createQueue(queueConfiguration)
             queue.add(5)
-            sleep(1000)
             queue.add(5)
-            queue.close()
-            sleep(1000)
+            queue.closeBlocking()
             probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
         then: "there is additional probe"
             probes.limit() == probeSize * (range.size() + 1) + headerSize
@@ -99,7 +93,7 @@ class ContinuousWritesTest extends Specification
 
             StatsQueue queue = TestQueueUtil.createQueue(queueConfiguration)
 
-            int[] elementsToFillWholeBuffer = allocate(queueConfiguration, probeSize)
+            int[] elementsToFillWholeBuffer = allocate(queueConfiguration, probeSize, headerSize)
         when:
             for (int i = 0; i < elementsToFillWholeBuffer.length; i++)
             {
@@ -107,17 +101,18 @@ class ContinuousWritesTest extends Specification
             }
             queue.add(1)
             queue.add(1)
-            queue.close()
+            queue.closeBlocking()
         then:
             noExceptionThrown()
         where:
             disableCompression << [true, false]
             probeSize << [DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM, CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM]
+            headerSize << [0, CompressedProbeWriter.HEADER_SIZE]
     }
 
-    private static int[] allocate(QueueConfiguration queueConfiguration, int probeSize)
+    private static int[] allocate(QueueConfiguration queueConfiguration, int probeSize, int headerSize)
     {
-        int elements = (int) (queueConfiguration.mmapSize / probeSize)
+        int elements = (int) ((int) (queueConfiguration.mmapSize / probeSize) - (headerSize / probeSize))
         return new int[elements]
     }
 }

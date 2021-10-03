@@ -8,6 +8,7 @@ import net.openhft.chronicle.core.Jvm;
 import org.jctools.queues.MpscArrayQueue;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -23,6 +24,8 @@ class FileAccessWorker implements Runnable
     private volatile int isRunning = NOT_RUNNING;
     private static final AtomicIntegerFieldUpdater<FileAccessWorker> isRunningFieldUpdater =
             AtomicIntegerFieldUpdater.newUpdater(FileAccessWorker.class, "isRunning");
+
+    static ConcurrentHashMap<Integer, Boolean> closedFiles = new ConcurrentHashMap<>();
 
     MpscArrayQueue<Probe> probes = new MpscArrayQueue<>(2 << 15);
     FileAccess fileAccess;
@@ -119,10 +122,23 @@ class FileAccessWorker implements Runnable
 
     public void close(int fileAccessId)
     {
-        var closeFileMessage = Probe.closeFileMessage(fileAccessId);
+        sendCloseFileMessage(Probe.closeFileMessage(fileAccessId));
+    }
+
+    public void closeBlocking(int fileAccessId)
+    {
+        sendCloseFileMessage(Probe.closeFileSyncMessage(fileAccessId));
+        while(closedFiles.remove(fileAccessId) == null)
+        {
+            busyWait(2e3);
+        }
+    }
+
+    private void sendCloseFileMessage(Probe closeFileMessage)
+    {
         while (!probes.offer(closeFileMessage))
         {
-            log.warn("Send queue full, cannot send close file message for {}", fileAccessId);
+            log.warn("Send queue full, cannot send close file message for {}", closeFileMessage.getAccessId());
             busyWait(1e3);
         }
     }

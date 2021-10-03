@@ -1,6 +1,5 @@
 package net.pedegie.stats.api.queue
 
-import lombok.Builder
 import spock.lang.Specification
 import spock.lang.Unroll
 
@@ -13,7 +12,6 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
-import java.util.function.Function
 
 class RecyclerTest extends Specification
 {
@@ -38,7 +36,7 @@ class RecyclerTest extends Specification
                     .fileCycleDuration(fileCycleDuration)
                     .fileCycleClock(Clock.fixed(now.toInstant(), ZoneId.of("UTC")))
                     .build()
-            TestQueueUtil.createQueue(queueConfiguration).close()
+            TestQueueUtil.createQueue(queueConfiguration).closeBlocking()
         expect:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Path expectedLogFileName = PathDateFormatter.appendDate(TestQueueUtil.PATH, ZonedDateTime.of(LocalDateTime.parse(expectedDateAppendedToLogFile), ZoneId.of("UTC")))
@@ -95,8 +93,7 @@ class RecyclerTest extends Specification
         when: "we put 2 elements to queue"
             queue.add(5)
             queue.add(5)
-            queue.close()
-            sleep(1000)
+            queue.closeBlocking()
         then: "there are two elements in file"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Files.readAllBytes(logFile).length == probeSize * 2 + headerSize
@@ -112,8 +109,7 @@ class RecyclerTest extends Specification
             queue = TestQueueUtil.createQueue(queueConfiguration)
         and: "we put 3rd element"
             queue.add(5)
-            queue.close()
-            sleep(1000)
+            queue.closeBlocking()
             logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
         then: "there are 3 elements in file"
             Files.readAllBytes(logFile).length == probeSize * 3 + headerSize
@@ -129,25 +125,21 @@ class RecyclerTest extends Specification
             ZonedDateTime time = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:00:00"), ZoneId.of("UTC"))
             SpyClock spyClock = new SpyClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
             QueueConfiguration queueConfiguration = QueueConfiguration
-                            .builder()
-                            .path(TestQueueUtil.PATH)
-                            .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
-                            .fileCycleClock(spyClock)
-                            .disableCompression(disableCompression)
-                            .build()
+                    .builder()
+                    .path(TestQueueUtil.PATH)
+                    .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
+                    .fileCycleClock(spyClock)
+                    .disableCompression(disableCompression)
+                    .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put 2 elements to queue"
             queue.add(5)
             queue.add(5)
         and: "we set time one cycle ahead"
-            time = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:01:00"), ZoneId.of("UTC"))
-            spyClock.setClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
-        and: "we put two more elements (one will be dropped during recyle)"
+            spyClock.setClock(Clock.fixed(time.plus(1, ChronoUnit.MINUTES).toInstant(), ZoneId.of("UTC")))
+        and: "we put one more element"
             queue.add(5)
-            sleep(1000)
-            queue.add(5)
-            queue.close()
-            sleep(1000)
+            queue.closeBlocking()
         then: "it should create second file representing next one-minute cycle"
             List<Path> logFiles = TestQueueUtil.findMany(TestQueueUtil.PATH).sort { it.toString() }
             logFiles.size() == 2
@@ -177,17 +169,20 @@ class RecyclerTest extends Specification
         }
 
         @Override
-        ZoneId getZone() {
+        ZoneId getZone()
+        {
             return clock.getZone()
         }
 
         @Override
-        Clock withZone(ZoneId zone) {
+        Clock withZone(ZoneId zone)
+        {
             return clock.withZone(zone)
         }
 
         @Override
-        Instant instant() {
+        Instant instant()
+        {
             return clock.instant()
         }
 

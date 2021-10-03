@@ -39,8 +39,8 @@ class CrashRecoveryTest extends Specification
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put elements"
             (0..(crashOnElement)).forEach { queue.add(5) }
+            queue.closeBlocking()
         then: "there are probes in file but last one is missing timestamp"
-            sleep(1000)
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             byte[] bytes = Files.readAllBytes(logFile)
             bytes.length == halfProbeSize
@@ -55,7 +55,7 @@ class CrashRecoveryTest extends Specification
             queue = TestQueueUtil.createQueue(queueConfiguration)
         and: "we put there one element"
             queue.add(5)
-            queue.close()
+            queue.closeBlocking()
         then: "it should remove previous half-written probe and then append new element to queue"
             Path logFile2 = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer bytes2 = ByteBuffer.wrap(Files.readAllBytes(logFile2))
@@ -102,7 +102,7 @@ class CrashRecoveryTest extends Specification
             queue = TestQueueUtil.createQueue(queueConfiguration)
         and: "we put there one element"
             queue.add(5)
-            queue.close()
+            queue.closeBlocking()
         then: "it should contain one element"
             Path logFile2 = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer bytes2 = ByteBuffer.wrap(Files.readAllBytes(logFile2))

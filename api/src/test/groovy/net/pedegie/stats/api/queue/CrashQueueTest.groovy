@@ -32,8 +32,7 @@ class CrashQueueTest extends Specification
         when: "we add 2 elements"
             queue.add(5)
             queue.add(5)
-            queue.close()
-            sleep(1000)
+            queue.closeBlocking()
         then: "there is single broken element in file but two elements in decorated queue"
             queue.size() == 2
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
