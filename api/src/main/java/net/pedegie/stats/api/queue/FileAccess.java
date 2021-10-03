@@ -69,12 +69,22 @@ class FileAccess
 
     private void closeFile(Probe probe)
     {
-        while (!files.get(probe.getAccessId()).writesEnabled())
+        while(true)
         {
-            busyWait(1e3);
+            var context = files.get(probe.getAccessId());
+            if(context.getTerminated().get())
+                return;
+
+            if(context.writesEnabled())
+                break;
+            else
+                busyWait(1e3);
         }
 
         var accessContext = files.remove(probe.getAccessId());
+
+        if(accessContext.getTerminated().get())
+            return;
 
         asyncWork(accessContext, () ->
         {
