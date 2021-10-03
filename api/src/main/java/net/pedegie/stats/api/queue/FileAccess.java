@@ -20,6 +20,7 @@ import java.util.function.Supplier;
 class FileAccess
 {
     private static final CompletableFuture<Object> COMPLETED = CompletableFuture.completedFuture(null);
+    private static final int TIMEOUT_SECONDS = 30;
 
     static int CLOSE_FILE_MESSAGE_ID = -1;
 
@@ -46,7 +47,7 @@ class FileAccess
         {
             if (isCloseFileMessage(probe))
             {
-                closeFile(probe.getAccessId()).get(5, TimeUnit.SECONDS);
+                closeFile(probe.getAccessId()).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
             } else if (fileAccess.writesEnabled())
             {
                 if (needRecycle(fileAccess, probe))
@@ -63,7 +64,7 @@ class FileAccess
         } catch (Exception e)
         {
             log.error("Closing file access due to error while processing probe: " + probe, e);
-            closeFile(probe.getAccessId()).get(5, TimeUnit.SECONDS);
+            closeFile(probe.getAccessId()).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
         }
     }
 
@@ -127,7 +128,7 @@ class FileAccess
             files.put(probe.getAccessId(), accessContext);
             accessContext.writeProbe(probe);
             return accessContext;
-        }).get(5, TimeUnit.SECONDS);
+        }).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     @SneakyThrows
@@ -140,7 +141,7 @@ class FileAccess
             PreToucher.preTouch(fileAccess.getBuffer());
             fileAccess.writeProbe(probe);
             return fileAccess;
-        }).get(5, TimeUnit.SECONDS);
+        }).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     private CompletableFuture<Object> asyncWork(FileAccessContext fileAccess, Supplier<FileAccessContext> work)
@@ -170,7 +171,7 @@ class FileAccess
             contexts[i] = closeFile(keys[i]);
         }
 
-        CompletableFuture.allOf(contexts).get(5L * size, TimeUnit.SECONDS);
+        CompletableFuture.allOf(contexts).get((long) TIMEOUT_SECONDS * size, TimeUnit.SECONDS);
         assert files.size() == 0;
     }
 }

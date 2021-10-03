@@ -43,7 +43,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         this.closeLock = queueConfiguration.getSynchronizer().newLock();
         this.fileCycleClock = queueConfiguration.getFileCycleClock();
         fileAccessWorker.start();
-        var registerResult = fileAccessWorker.registerFile(queueConfiguration).get(5, TimeUnit.SECONDS);
+        var registerResult = fileAccessWorker.registerFile(queueConfiguration).get(30, TimeUnit.SECONDS);
         this.fileAccessId = registerResult.getA();
         this.closed = registerResult.getB();
 
