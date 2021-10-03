@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.annotation.ForceInline;
 import net.pedegie.stats.api.tailer.Tailer;
 import org.jetbrains.annotations.NotNull;
@@ -272,7 +271,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         close();
         while (!closed.get())
         {
-            busyWait(2e3);
+            BusyWaiter.busyWait(2e3);
         }
     }
 
@@ -289,14 +288,5 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public static void shutdownForce()
     {
         fileAccessWorker.shutdownForce();
-    }
-
-    private static void busyWait(double nanos)
-    {
-        long start = System.nanoTime();
-        while (System.nanoTime() - start < nanos)
-        {
-            Jvm.safepoint();
-        }
     }
 }
