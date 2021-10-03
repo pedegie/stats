@@ -18,6 +18,7 @@ import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.LockSupport;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
 @Slf4j
@@ -272,7 +273,9 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         close();
         while (!closed.get())
         {
+            log.warn("WAITING CLOSE BLOCKING");
             busyWait(2e3);
+            LockSupport.parkNanos((int) 1e9);
         }
     }
 
