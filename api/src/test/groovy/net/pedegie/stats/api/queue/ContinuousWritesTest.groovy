@@ -71,9 +71,8 @@ class ContinuousWritesTest extends Specification
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
             probes.limit() == probeSize * range.size() + headerSize
-        when: "we put two more probes, because of one is dropped during resize"
+        when: "we put one more probe"
             queue = TestQueueUtil.createQueue(queueConfiguration)
-            queue.add(5)
             queue.add(5)
             queue.closeBlocking()
             probes = ByteBuffer.wrap(Files.readAllBytes(logFile))

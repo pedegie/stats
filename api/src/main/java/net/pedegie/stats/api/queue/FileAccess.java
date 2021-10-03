@@ -3,20 +3,25 @@ package net.pedegie.stats.api.queue;
 import gnu.trove.map.TIntObjectMap;
 import gnu.trove.map.hash.TIntObjectHashMap;
 import lombok.AccessLevel;
+import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import net.openhft.chronicle.core.Jvm;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 class FileAccess
 {
+    private static final CompletableFuture<Object> COMPLETED = CompletableFuture.completedFuture(null);
+    private static final int TIMEOUT_SECONDS = 30;
+
     static int CLOSE_FILE_MESSAGE_ID = -1;
 
     Executor pool = Executors.newSingleThreadExecutor();
@@ -30,6 +35,7 @@ class FileAccess
         idSequence = Synchronizer.CONCURRENT.newCounter();
     }
 
+    @SneakyThrows
     public void writeProbe(Probe probe)
     {
         var fileAccess = files.get(probe.getAccessId());
@@ -41,7 +47,7 @@ class FileAccess
         {
             if (isCloseFileMessage(probe))
             {
-                closeFile(probe);
+                closeFile(probe.getAccessId()).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
             } else if (fileAccess.writesEnabled())
             {
                 if (needRecycle(fileAccess, probe))
@@ -58,7 +64,7 @@ class FileAccess
         } catch (Exception e)
         {
             log.error("Closing file access due to error while processing probe: " + probe, e);
-            closeFile(probe);
+            closeFile(probe.getAccessId()).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
         }
     }
 
@@ -67,26 +73,21 @@ class FileAccess
         return probe.getTimestamp() >= fileAccess.getNextCycleTimestampMillis();
     }
 
-    private void closeFile(Probe probe)
+    private CompletableFuture<Object> closeFile(int accessId)
     {
-        while(true)
+        BooleanSupplier waitCondition = () ->
         {
-            var context = files.get(probe.getAccessId());
-            if(context.getTerminated().get())
-                return;
+            var context = files.get(accessId);
+            return !context.getTerminated().get() && !context.writesEnabled();
+        };
+        BusyWaiter.busyWait(waitCondition, "closing file");
 
-            if(context.writesEnabled())
-                break;
-            else
-                busyWait(1e3);
-        }
+        var accessContext = files.remove(accessId);
 
-        var accessContext = files.remove(probe.getAccessId());
+        if (accessContext.getTerminated().get())
+            return COMPLETED;
 
-        if(accessContext.getTerminated().get())
-            return;
-
-        asyncWork(accessContext, () ->
+        return asyncWork(accessContext, () ->
         {
             accessContext.close();
             accessContext.terminate();
@@ -116,6 +117,7 @@ class FileAccess
         });
     }
 
+    @SneakyThrows
     private void recycle(FileAccessContext fileAccess, Probe probe)
     {
         asyncWork(fileAccess, () ->
@@ -126,9 +128,10 @@ class FileAccess
             files.put(probe.getAccessId(), accessContext);
             accessContext.writeProbe(probe);
             return accessContext;
-        });
+        }).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
+    @SneakyThrows
     private void resize(FileAccessContext fileAccess, Probe probe)
     {
         asyncWork(fileAccess, () ->
@@ -138,13 +141,13 @@ class FileAccess
             PreToucher.preTouch(fileAccess.getBuffer());
             fileAccess.writeProbe(probe);
             return fileAccess;
-        });
+        }).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
-    private void asyncWork(FileAccessContext fileAccess, Supplier<FileAccessContext> work)
+    private CompletableFuture<Object> asyncWork(FileAccessContext fileAccess, Supplier<FileAccessContext> work)
     {
         fileAccess.disableWrites();
-        CompletableFuture.supplyAsync(() ->
+        return CompletableFuture.supplyAsync(() ->
         {
             var accessContext = work.get();
             accessContext.enableWrites();
@@ -156,28 +159,19 @@ class FileAccess
         });
     }
 
-    public void closeAll()
+    @SneakyThrows
+    public void closeAllBlocking()
     {
-        files.forEachValue(accessContext ->
-        {
-            while (!accessContext.writesEnabled())
-            {
-                busyWait(1e3);
-            }
-            accessContext.close();
-            accessContext.terminate();
-            return true;
-        });
+        CompletableFuture[] contexts = new CompletableFuture[files.size()];
+        var keys = files.keys();
+        var size = keys.length;
 
-        files.clear();
-    }
-
-    private static void busyWait(double nanos)
-    {
-        long start = System.nanoTime();
-        while (System.nanoTime() - start < nanos)
+        for (int i = 0; i < size; i++)
         {
-            Jvm.safepoint();
+            contexts[i] = closeFile(keys[i]);
         }
+
+        CompletableFuture.allOf(contexts).get((long) TIMEOUT_SECONDS * size, TimeUnit.SECONDS);
+        assert files.size() == 0;
     }
 }

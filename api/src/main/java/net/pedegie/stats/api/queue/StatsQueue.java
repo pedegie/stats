@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.annotation.ForceInline;
 import net.pedegie.stats.api.tailer.Tailer;
 import org.jetbrains.annotations.NotNull;
@@ -44,7 +43,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         this.closeLock = queueConfiguration.getSynchronizer().newLock();
         this.fileCycleClock = queueConfiguration.getFileCycleClock();
         fileAccessWorker.start();
-        var registerResult = fileAccessWorker.registerFile(queueConfiguration).get(5, TimeUnit.SECONDS);
+        var registerResult = fileAccessWorker.registerFile(queueConfiguration).get(30, TimeUnit.SECONDS);
         this.fileAccessId = registerResult.getA();
         this.closed = registerResult.getB();
 
@@ -270,10 +269,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public void closeBlocking()
     {
         close();
-        while (!closed.get())
-        {
-            busyWait(2e3);
-        }
+        BusyWaiter.busyWait(() -> !closed.get(), "close blocking");
     }
 
     public boolean isClosed()
@@ -289,14 +285,5 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public static void shutdownForce()
     {
         fileAccessWorker.shutdownForce();
-    }
-
-    private static void busyWait(double nanos)
-    {
-        long start = System.nanoTime();
-        while (System.nanoTime() - start < nanos)
-        {
-            Jvm.safepoint();
-        }
     }
 }

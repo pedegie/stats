@@ -4,7 +4,6 @@ import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
-import net.openhft.chronicle.core.Jvm;
 import org.jctools.queues.MpscArrayQueue;
 
 import java.util.concurrent.CompletableFuture;
@@ -54,7 +53,7 @@ class FileAccessWorker implements Runnable
 
         if (isForceShutdown())
         {
-            fileAccess.closeAll();
+            fileAccess.closeAllBlocking();
             setNonRunning();
             return;
         }
@@ -64,7 +63,7 @@ class FileAccessWorker implements Runnable
         {
             fileAccess.writeProbe(probe);
         }
-        fileAccess.closeAll();
+        fileAccess.closeAllBlocking();
         setNonRunning();
     }
 
@@ -110,11 +109,7 @@ class FileAccessWorker implements Runnable
 
     private void waitUntilTerminated()
     {
-        while (isRunningFieldUpdater.get(this) != NOT_RUNNING)
-        {
-            busyWait(2e3);
-        }
-
+        BusyWaiter.busyWait(() -> isRunningFieldUpdater.get(this) != NOT_RUNNING, "waiting for access worker termination");
         fileAccess = null;
     }
 
@@ -145,19 +140,6 @@ class FileAccessWorker implements Runnable
 
     private void sendCloseFileMessage(Probe closeFileMessage)
     {
-        while (!probes.offer(closeFileMessage))
-        {
-            log.warn("Send queue full, cannot send close file message for {}", closeFileMessage.getAccessId());
-            busyWait(1e3);
-        }
-    }
-
-    private static void busyWait(double nanos)
-    {
-        long start = System.nanoTime();
-        while (System.nanoTime() - start < nanos)
-        {
-            Jvm.safepoint();
-        }
+        BusyWaiter.busyWait(() -> !probes.offer(closeFileMessage), "sending close file message");
     }
 }
