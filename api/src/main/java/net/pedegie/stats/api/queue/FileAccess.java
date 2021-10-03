@@ -99,7 +99,11 @@ class FileAccess
             files.put(id, accessContext);
             accessContext.enableWrites();
             return new Tuple<>(id, accessContext.getTerminated());
-        }, pool);
+        }, pool).exceptionally(throwable ->
+        {
+            log.error("", throwable);
+            return null;
+        });
     }
 
     private void recycle(FileAccessContext fileAccess, Probe probe)

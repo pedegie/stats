@@ -2,6 +2,7 @@ package net.pedegie.stats.api.queue;
 
 import lombok.AccessLevel;
 import lombok.Builder;
+import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import net.openhft.chronicle.core.Jvm;
@@ -14,6 +15,7 @@ import java.time.Clock;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 
@@ -31,6 +33,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     private final int fileAccessId;
 
     @Builder
+    @SneakyThrows
     protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration, Tailer<Long, Integer> tailer)
     {
         QueueConfigurationValidator.validate(queueConfiguration);
@@ -41,7 +44,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         this.closeLock = queueConfiguration.getSynchronizer().newLock();
         this.fileCycleClock = queueConfiguration.getFileCycleClock();
         fileAccessWorker.start();
-        var registerResult = fileAccessWorker.registerFile(queueConfiguration).join(); // todo timeout
+        var registerResult = fileAccessWorker.registerFile(queueConfiguration).get(5, TimeUnit.SECONDS);
         this.fileAccessId = registerResult.getA();
         this.closed = registerResult.getB();
 
