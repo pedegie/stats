@@ -12,6 +12,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -73,17 +74,12 @@ class FileAccess
 
     private CompletableFuture<Object> closeFile(int accessId)
     {
-        while (true)
+        BooleanSupplier waitCondition = () ->
         {
             var context = files.get(accessId);
-            if (context.getTerminated().get())
-                return COMPLETED;
-
-            if (context.writesEnabled())
-                break;
-            else
-                BusyWaiter.busyWait(1e3);
-        }
+            return !context.getTerminated().get() && !context.writesEnabled();
+        };
+        BusyWaiter.busyWait(waitCondition);
 
         var accessContext = files.remove(accessId);
 
@@ -169,7 +165,7 @@ class FileAccess
         var keys = files.keys();
         var size = keys.length;
 
-        for(int i = 0; i < size; i++)
+        for (int i = 0; i < size; i++)
         {
             contexts[i] = closeFile(keys[i]);
         }

@@ -269,10 +269,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public void closeBlocking()
     {
         close();
-        while (!closed.get())
-        {
-            BusyWaiter.busyWait(2e3);
-        }
+        BusyWaiter.busyWait(() -> !closed.get());
     }
 
     public boolean isClosed()
