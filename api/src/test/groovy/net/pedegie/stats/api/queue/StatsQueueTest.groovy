@@ -16,6 +16,11 @@ class StatsQueueTest extends Specification
         statsQueue = createQueue(new ConcurrentLinkedQueue<Integer>())
     }
 
+    def cleanup()
+    {
+        StatsQueue.shutdown()
+    }
+
     def cleanupSpec()
     {
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())

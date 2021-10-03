@@ -41,6 +41,8 @@ class FileAccessWorker implements Runnable
         {
             return;
         }
+        log.info("STARTING FILE ACCESS WORKER");
+
         fileAccess = new FileAccess();
         singleThreadPool.execute(this);
     }
@@ -128,7 +130,7 @@ class FileAccessWorker implements Runnable
 
     private boolean isRunning()
     {
-        return isRunningFieldUpdater.getAndSet(this, RUNNING) == RUNNING;
+        return isRunningFieldUpdater.getAndSet(this, RUNNING) != NOT_RUNNING;
     }
 
     private boolean notClosed()

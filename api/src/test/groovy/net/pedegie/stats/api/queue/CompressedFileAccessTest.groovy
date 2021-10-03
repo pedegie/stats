@@ -19,6 +19,11 @@ class CompressedFileAccessTest extends Specification
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
+    def cleanup()
+    {
+        StatsQueue.shutdown()
+    }
+
     def cleanupSpec()
     {
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
