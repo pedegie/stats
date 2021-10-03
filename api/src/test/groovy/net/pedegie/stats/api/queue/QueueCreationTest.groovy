@@ -37,7 +37,7 @@ class QueueCreationTest extends Specification
             Files.newDirectoryStream(nestedFilePath.getParent())
                     .find { it.toAbsolutePath().toString().contains("stats_queue") } != null
         cleanup:
-            queue.close()
+            queue.closeBlocking()
             FileUtils.cleanDirectory(nestedFilePath.getParent())
     }
 
@@ -123,7 +123,7 @@ class QueueCreationTest extends Specification
         when: "we put first element and then remove from queue"
             queue.add(5)
             queue.remove()
-            queue.close()
+            queue.closeBlocking()
         then: "there should be 2 elements"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer logFileBuffer = ByteBuffer.wrap(Files.readAllBytes(logFile))
@@ -133,7 +133,7 @@ class QueueCreationTest extends Specification
         when: "we create queue again and put there one element"
             queue = TestQueueUtil.createQueue(queueConfiguration)
             queue.add(5)
-            queue.close()
+            queue.closeBlocking()
         then: "it should have 3 elements"
             Path logFile2 = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer logFileBuffer2 = ByteBuffer.wrap(Files.readAllBytes(logFile2))

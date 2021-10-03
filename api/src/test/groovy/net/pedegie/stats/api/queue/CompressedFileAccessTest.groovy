@@ -99,7 +99,7 @@ class CompressedFileAccessTest extends Specification
             queue.add(5)
             queue.add(5)
             queue.add(5)
-            queue.close()
+            queue.closeBlocking()
         then: "there are stored 3 non-compressed elements"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 3
