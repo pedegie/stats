@@ -109,7 +109,7 @@ class FileAccessWorker implements Runnable
 
     private void waitUntilTerminated()
     {
-        BusyWaiter.busyWait(() -> isRunningFieldUpdater.get(this) != NOT_RUNNING);
+        BusyWaiter.busyWait(() -> isRunningFieldUpdater.get(this) != NOT_RUNNING, "waiting for access worker termination");
         fileAccess = null;
     }
 
@@ -140,6 +140,6 @@ class FileAccessWorker implements Runnable
 
     private void sendCloseFileMessage(Probe closeFileMessage)
     {
-        BusyWaiter.busyWait(() -> !probes.offer(closeFileMessage));
+        BusyWaiter.busyWait(() -> !probes.offer(closeFileMessage), "sending close file message");
     }
 }

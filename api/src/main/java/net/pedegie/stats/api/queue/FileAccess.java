@@ -79,7 +79,7 @@ class FileAccess
             var context = files.get(accessId);
             return !context.getTerminated().get() && !context.writesEnabled();
         };
-        BusyWaiter.busyWait(waitCondition);
+        BusyWaiter.busyWait(waitCondition, "closing file");
 
         var accessContext = files.remove(accessId);
 
