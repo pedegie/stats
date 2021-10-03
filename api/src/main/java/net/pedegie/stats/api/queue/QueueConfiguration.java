@@ -16,10 +16,13 @@ import java.util.function.Function;
 public class QueueConfiguration
 {
     private static final Duration DEFAULT_CYCLE_DURATION = Duration.of(1, ChronoUnit.DAYS);
+    private static final int MB_500 = 1024 * 1024 * 512;
+
     @Getter
     Path path;
     @Getter
-    int mmapSize;
+    @Builder.Default
+    int mmapSize = MB_500;
     @Getter
     @Builder.Default
     Duration fileCycleDuration = DEFAULT_CYCLE_DURATION;
@@ -35,6 +38,9 @@ public class QueueConfiguration
     @Getter
     @Builder.Default
     boolean unmapOnClose = true;
+    @Getter
+    @Builder.Default
+    boolean preTouch = true;
     @Getter
     @Builder.Default
     WriteFilter writeFilter = WriteFilter.acceptAllFilter();

@@ -105,7 +105,9 @@ class FileAccess
         return CompletableFuture.supplyAsync(() ->
         {
             var accessContext = FileAccessStrategy.fileAccess(conf);
-            PreToucher.preTouch(accessContext.getBuffer());
+            if (accessContext.getQueueConfiguration().isPreTouch())
+                PreToucher.preTouch(accessContext.getBuffer());
+
             var id = idSequence.incrementAndGet();
             files.put(id, accessContext);
             accessContext.enableWrites();
@@ -124,7 +126,8 @@ class FileAccess
         {
             fileAccess.close();
             var accessContext = FileAccessStrategy.fileAccess(fileAccess.getQueueConfiguration(), fileAccess.getTerminated());
-            PreToucher.preTouch(accessContext.getBuffer());
+            if (accessContext.getQueueConfiguration().isPreTouch())
+                PreToucher.preTouch(accessContext.getBuffer());
             files.put(probe.getAccessId(), accessContext);
             accessContext.writeProbe(probe);
             return accessContext;
@@ -138,7 +141,8 @@ class FileAccess
         {
             fileAccess.close();
             fileAccess.mmapNextSlice();
-            PreToucher.preTouch(fileAccess.getBuffer());
+            if (fileAccess.getQueueConfiguration().isPreTouch())
+                PreToucher.preTouch(fileAccess.getBuffer());
             fileAccess.writeProbe(probe);
             return fileAccess;
         }).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);

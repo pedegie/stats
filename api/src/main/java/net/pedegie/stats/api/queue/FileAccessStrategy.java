@@ -11,8 +11,6 @@ import java.util.function.Function;
 @Slf4j
 class FileAccessStrategy
 {
-    private static final int MB_500 = 1024 * 1024 * 512;
-
     public static FileAccessContext fileAccess(QueueConfiguration configuration)
     {
         return fileAccess(configuration, new AtomicBoolean());
@@ -24,7 +22,7 @@ class FileAccessStrategy
         var fileName = PathDateFormatter.appendDate(configuration.getPath(), offsetDateTime);
         var probeWriter = probeWriter(configuration, offsetDateTime);
         var nextCycleTimestampMillis = offsetDateTime.toInstant().toEpochMilli() + configuration.getFileCycleDuration().getSeconds() * 1000;
-        var mmapSize = configuration.getMmapSize() == 0 ? MB_500 : FileUtils.roundToPageSize(configuration.getMmapSize());
+        var mmapSize = FileUtils.roundToPageSize(configuration.getMmapSize());
 
         FileUtils.createFile(fileName);
 

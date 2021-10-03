@@ -56,8 +56,11 @@ public class StatsQueue<T> implements Queue<T>, Closeable
                         "mmapSize: {} B\n" +
                         "fileCycleDurationInMillis: {}\n" +
                         "disableCompression: {}\n" +
-                        "disableSynchronization: {}", conf.getPath(), conf.getMmapSize(), conf.getFileCycleDurationInMillis(),
-                conf.isDisableCompression(), conf.isDisableSynchronization());
+                        "disableSynchronization: {}\n" +
+                        "preTouchEnabled: {}\n" +
+                        "unmapOnClose: {}",
+                conf.getPath(), conf.getMmapSize(), conf.getFileCycleDurationInMillis(),
+                conf.isDisableCompression(), conf.isDisableSynchronization(), conf.isPreTouch(), conf.isUnmapOnClose());
     }
 
     @Override

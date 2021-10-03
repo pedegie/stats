@@ -13,7 +13,7 @@ class QueueConfigurationValidator
         Objects.requireNonNull(queueConfiguration);
         Objects.requireNonNull(queueConfiguration.getPath());
 
-        if (queueConfiguration.getMmapSize() != 0 && queueConfiguration.getMmapSize() < OS.pageSize())
+        if (queueConfiguration.getMmapSize() < OS.pageSize())
         {
             throw new IllegalArgumentException(EXCEPTION_HEADER + "mmapSize: " + queueConfiguration.getMmapSize() + " cannot be less than page size: " + OS.pageSize());
         }
