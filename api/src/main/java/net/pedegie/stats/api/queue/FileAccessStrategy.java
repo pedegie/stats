@@ -20,11 +20,11 @@ class FileAccessStrategy
     {
         var offsetDateTime = newFileOffset(configuration);
         var fileName = PathDateFormatter.appendDate(configuration.getPath(), offsetDateTime);
+        FileUtils.createFile(fileName);
+
         var probeWriter = probeWriter(configuration, offsetDateTime);
         var nextCycleTimestampMillis = offsetDateTime.toInstant().toEpochMilli() + configuration.getFileCycleDuration().getSeconds() * 1000;
         var mmapSize = FileUtils.roundToPageSize(configuration.getMmapSize());
-
-        FileUtils.createFile(fileName);
 
         return FileAccessContext.builder()
                 .fileName(fileName)
@@ -34,6 +34,7 @@ class FileAccessStrategy
                 .queueConfiguration(configuration)
                 .terminated(terminated)
                 .build();
+
     }
 
     private static ZonedDateTime newFileOffset(QueueConfiguration configuration)
@@ -71,4 +72,5 @@ class FileAccessStrategy
         }
         return ProbeWriter.defaultProbeWriter();
     }
+
 }

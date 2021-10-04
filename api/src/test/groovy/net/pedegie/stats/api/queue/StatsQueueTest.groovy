@@ -44,6 +44,7 @@ class StatsQueueTest extends Specification
     {
         given:
             FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
+            StatsQueue.shutdown()
             statsQueue = createQueue(new ArrayBlockingQueue<Integer>(1))
         when:
             statsQueue.add(1)
@@ -130,6 +131,7 @@ class StatsQueueTest extends Specification
     {
         given:
             FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
+            StatsQueue.shutdown()
             statsQueue = createQueue(new ArrayBlockingQueue<Integer>(1))
         when:
             boolean firstElementPut = statsQueue.offer(1)

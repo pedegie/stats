@@ -23,19 +23,17 @@ class FileAccess
     private static final int TIMEOUT_SECONDS = 30;
 
     static int CLOSE_FILE_MESSAGE_ID = -1;
+    static int FILE_ALREADY_EXISTS = 0;
 
     Executor pool = Executors.newSingleThreadExecutor();
+    Executor registerFilePool = Executors.newSingleThreadExecutor();
     TIntObjectMap<FileAccessContext> files;
-
-    Counter idSequence;
 
     FileAccess()
     {
         files = new TIntObjectHashMap<>(8);
-        idSequence = Synchronizer.CONCURRENT.newCounter();
     }
 
-    @SneakyThrows
     public void writeProbe(Probe probe)
     {
         var fileAccess = files.get(probe.getAccessId());
@@ -47,7 +45,7 @@ class FileAccess
         {
             if (isCloseFileMessage(probe))
             {
-                closeFile(probe.getAccessId()).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                closeFile(probe.getAccessId()).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
             } else if (fileAccess.writesEnabled())
             {
                 if (needRecycle(fileAccess, probe))
@@ -64,7 +62,7 @@ class FileAccess
         } catch (Exception e)
         {
             log.error("Closing file access due to error while processing probe: " + probe, e);
-            closeFile(probe.getAccessId()).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            closeFile(probe.getAccessId()).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
         }
     }
 
@@ -83,7 +81,6 @@ class FileAccess
         BusyWaiter.busyWait(waitCondition, "closing file");
 
         var accessContext = files.remove(accessId);
-
         if (accessContext.getTerminated().get())
             return COMPLETED;
 
@@ -104,15 +101,17 @@ class FileAccess
     {
         return CompletableFuture.supplyAsync(() ->
         {
-            var accessContext = FileAccessStrategy.fileAccess(conf);
-            if (accessContext.getQueueConfiguration().isPreTouch())
-                PreToucher.preTouch(accessContext.getBuffer());
+            var id = conf.getPath().hashCode();
+            if(files.containsKey(id))
+                return new Tuple<Integer, AtomicBoolean>(FILE_ALREADY_EXISTS, null);
 
-            var id = idSequence.incrementAndGet();
+            var accessContext = FileAccessStrategy.fileAccess(conf);
+            preTouch(accessContext);
             files.put(id, accessContext);
             accessContext.enableWrites();
+
             return new Tuple<>(id, accessContext.getTerminated());
-        }, pool).exceptionally(throwable ->
+        }, registerFilePool).exceptionally(throwable ->
         {
             log.error("", throwable);
             return null;
@@ -125,13 +124,13 @@ class FileAccess
         asyncWork(fileAccess, () ->
         {
             fileAccess.close();
+
             var accessContext = FileAccessStrategy.fileAccess(fileAccess.getQueueConfiguration(), fileAccess.getTerminated());
-            if (accessContext.getQueueConfiguration().isPreTouch())
-                PreToucher.preTouch(accessContext.getBuffer());
+            preTouch(accessContext);
             files.put(probe.getAccessId(), accessContext);
             accessContext.writeProbe(probe);
             return accessContext;
-        }).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        }).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     @SneakyThrows
@@ -141,11 +140,10 @@ class FileAccess
         {
             fileAccess.close();
             fileAccess.mmapNextSlice();
-            if (fileAccess.getQueueConfiguration().isPreTouch())
-                PreToucher.preTouch(fileAccess.getBuffer());
+            preTouch(fileAccess);
             fileAccess.writeProbe(probe);
             return fileAccess;
-        }).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        }).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     private CompletableFuture<Object> asyncWork(FileAccessContext fileAccess, Supplier<FileAccessContext> work)
@@ -177,5 +175,11 @@ class FileAccess
 
         CompletableFuture.allOf(contexts).get((long) TIMEOUT_SECONDS * size, TimeUnit.SECONDS);
         assert files.size() == 0;
+    }
+
+    private void preTouch(FileAccessContext accessContext)
+    {
+        if (accessContext.getQueueConfiguration().isPreTouch())
+            PreToucher.preTouch(accessContext.getBuffer());
     }
 }

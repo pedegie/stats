@@ -43,8 +43,12 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         this.closeLock = queueConfiguration.getSynchronizer().newLock();
         this.fileCycleClock = queueConfiguration.getFileCycleClock();
         fileAccessWorker.start();
-        var registerResult = fileAccessWorker.registerFile(queueConfiguration).get(30, TimeUnit.SECONDS);
+        var registerResult = fileAccessWorker.registerFile(queueConfiguration).orTimeout(30, TimeUnit.SECONDS).join();
         this.fileAccessId = registerResult.getA();
+
+        if (fileAccessId == FileAccess.FILE_ALREADY_EXISTS)
+            throw new IllegalArgumentException("Queue which appends to " + queueConfiguration.getPath() + " already exists");
+
         this.closed = registerResult.getB();
 
     }

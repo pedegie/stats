@@ -78,14 +78,14 @@ class QueueCreationTest extends Specification
         expect:
             FileUtils.findFirstFreeIndex(buffer) == expectedFirstFreeIndex
         where:
-            buffer                                                        | expectedFirstFreeIndex
-            wrap([0, 0, 0, 0, 0, 0, 0, 0, 0, 0] as byte[])                | 0
-            wrap([1, 0, 0, 0, 0, 0, 0, 0, 0, 0] as byte[])                | 4
-            wrap([0, 0, 0, 1, 0, 0, 0, 0, 0, 0] as byte[])                | 4
-            wrap([0, 0, 0, 1, 1, 0, 0, 0, 0, 0] as byte[])                | 8
-            wrap([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0] as byte[])          | 8
-            wrap([0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0] as byte[])          | 12 // full
-            wrap([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1] as byte[])          | 12 // full
+            buffer                                               | expectedFirstFreeIndex
+            wrap([0, 0, 0, 0, 0, 0, 0, 0, 0, 0] as byte[])       | 0
+            wrap([1, 0, 0, 0, 0, 0, 0, 0, 0, 0] as byte[])       | 4
+            wrap([0, 0, 0, 1, 0, 0, 0, 0, 0, 0] as byte[])       | 4
+            wrap([0, 0, 0, 1, 1, 0, 0, 0, 0, 0] as byte[])       | 8
+            wrap([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0] as byte[]) | 8
+            wrap([0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0] as byte[]) | 12 // full
+            wrap([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1] as byte[]) | 12 // full
     }
 
     def "should correctly find first free index in specific corner case when window of 0's is the widest possible between two int probes (62 bits)"()
@@ -149,6 +149,20 @@ class QueueCreationTest extends Specification
             expectedBytesAfterWritingThreelements << [36, 32]
             secondProbeValueIndex << [12, 16]
 
+    }
+
+    def "should throw an exception when trying to create 2nd queue with the same path"()
+    {
+        given:
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
+                    .build()
+            TestQueueUtil.createQueue(queueConfiguration)
+        when: "we create 2nd queue with the same path"
+            TestQueueUtil.createQueue(queueConfiguration)
+        then:
+            thrown(IllegalArgumentException)
     }
 
     private static ByteBuffer wrap(byte[] bytes)
