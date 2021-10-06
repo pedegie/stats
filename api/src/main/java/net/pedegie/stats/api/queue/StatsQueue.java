@@ -14,8 +14,8 @@ import java.time.Clock;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
@@ -28,7 +28,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     Counter count;
     Lock closeLock;
     WriteFilter writeFilter;
-    AtomicBoolean closed;
+    Semaphore closed;
     private final int fileAccessId;
 
     @Builder
@@ -107,7 +107,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean add(T t)
     {
         boolean added = queue.add(t);
-        if (!closed.get() && added)
+        if (notClosed() && added)
         {
             int count = this.count.incrementAndGet();
             long time = time();
@@ -120,7 +120,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean remove(Object o)
     {
         boolean removed = queue.remove(o);
-        if (!closed.get() && removed)
+        if (notClosed() && removed)
         {
             int count = this.count.decrementAndGet();
             long time = time();
@@ -139,7 +139,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean addAll(@NotNull Collection<? extends T> c)
     {
         boolean added = queue.addAll(c);
-        if (!closed.get() && added)
+        if (notClosed() && added)
         {
             int count = this.count.addAndGet(c.size());
             long time = time();
@@ -152,7 +152,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean removeAll(@NotNull Collection<?> c)
     {
         boolean removed = queue.removeAll(c);
-        if (!closed.get() && removed)
+        if (notClosed() && removed)
         {
             setAndWriteCurrentSize();
         }
@@ -163,7 +163,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean retainAll(@NotNull Collection<?> c)
     {
         boolean retained = queue.retainAll(c);
-        if (!closed.get() && retained)
+        if (notClosed() && retained)
         {
             setAndWriteCurrentSize();
         }
@@ -183,7 +183,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public void clear()
     {
         queue.clear();
-        if (!closed.get())
+        if (notClosed())
         {
             count.set(0);
             long time = time();
@@ -195,7 +195,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean offer(T t)
     {
         boolean offered = queue.offer(t);
-        if (!closed.get() && offered)
+        if (notClosed() && offered)
         {
             int count = this.count.incrementAndGet();
             long time = time();
@@ -208,7 +208,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public T remove()
     {
         T removed = queue.remove();
-        if (!closed.get())
+        if (notClosed())
         {
             int count = this.count.decrementAndGet();
             long time = time();
@@ -221,7 +221,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public T poll()
     {
         T polled = queue.poll();
-        if (!closed.get() && polled != null)
+        if (notClosed() && polled != null)
         {
             int count = this.count.decrementAndGet();
             long time = time();
@@ -262,7 +262,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         {
             try
             {
-                if (closed.get())
+                if (isClosed())
                     return;
 
                 fileAccessWorker.close(fileAccessId);
@@ -276,12 +276,17 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public void closeBlocking()
     {
         close();
-        BusyWaiter.busyWait(() -> !closed.get(), "close blocking");
+        BusyWaiter.busyWait(this::isClosed, "close blocking");
+    }
+
+    private boolean notClosed()
+    {
+        return !isClosed();
     }
 
     public boolean isClosed()
     {
-        return closed.get();
+        return closed.availablePermits() >= 4;
     }
 
     public static void shutdown()

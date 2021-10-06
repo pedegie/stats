@@ -11,26 +11,24 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.Semaphore;
 import java.util.function.Function;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 class FileAccessContext
 {
-    private static final int BUSY = 1;
-    private static final int FREE = 0;
-    @NonFinal
-    volatile int state = BUSY;
-
     @Getter
-    AtomicBoolean terminated;
+    Semaphore state;
 
     @Getter
     QueueConfiguration queueConfiguration;
     @Getter
+    @NonFinal
     long nextCycleTimestampMillis;
     @Getter
+    @NonFinal
     Path fileName;
+    @NonFinal
     ProbeWriter probeWriter;
     int mmapSize;
 
@@ -46,7 +44,7 @@ class FileAccessContext
 
     @Builder
     private FileAccessContext(Path fileName, Function<FileAccessContext, ProbeWriter> probeWriter, long nextCycleTimestampMillis,
-                              QueueConfiguration queueConfiguration, int mmapSize, AtomicBoolean terminated)
+                              QueueConfiguration queueConfiguration, int mmapSize)
     {
         this.queueConfiguration = queueConfiguration;
         this.fileName = fileName;
@@ -54,7 +52,7 @@ class FileAccessContext
         this.mmapSize = mmapSize;
         mmapNextSlice();
         this.probeWriter = probeWriter.apply(this);
-        this.terminated = terminated;
+        state = new Semaphore(3);
     }
 
     public void writeProbe(Probe probe)
@@ -64,17 +62,32 @@ class FileAccessContext
 
     boolean writesEnabled()
     {
-        return state == FREE;
+        return state.availablePermits() == 3;
     }
 
-    void disableWrites()
+    int availablePermits()
     {
-        state = BUSY;
+        return state.availablePermits();
     }
 
-    public void enableWrites()
+    void acquireWrites()
     {
-        state = FREE;
+        acquireWrites(1);
+    }
+
+    boolean acquireClose()
+    {
+        return acquireWrites(2);
+    }
+
+    private boolean acquireWrites(int writes)
+    {
+        return state.tryAcquire(writes);
+    }
+
+    public void releaseWrites()
+    {
+        state.release(1);
     }
 
     public void mmapNextSlice()
@@ -112,6 +125,30 @@ class FileAccessContext
 
     void terminate()
     {
-        terminated.set(true);
+        state.release(4);
+    }
+
+    boolean isTerminated()
+    {
+        return state.availablePermits() >= 4;
+    }
+
+    public FileAccessContext setFileName(Path fileName)
+    {
+        this.fileName = fileName;
+        return this;
+    }
+
+    public FileAccessContext setNextCycleTimestampMillis(long nextCycleTimestampMillis)
+    {
+        this.nextCycleTimestampMillis = nextCycleTimestampMillis;
+        return this;
+    }
+
+    public void reinitialize(Function<FileAccessContext, ProbeWriter> probeWriter)
+    {
+        this.fileSize = 0;
+        mmapNextSlice();
+        this.probeWriter = probeWriter.apply(this);
     }
 }

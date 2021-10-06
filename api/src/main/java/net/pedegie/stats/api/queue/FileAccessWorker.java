@@ -1,22 +1,24 @@
 package net.pedegie.stats.api.queue;
 
 import lombok.AccessLevel;
+import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.jctools.queues.MpscArrayQueue;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @Slf4j
 class FileAccessWorker implements Runnable
 {
-    private static final Executor singleThreadPool = Executors.newSingleThreadExecutor();
+    @NonFinal
+    private ExecutorService singleThreadPool;
 
     private static final byte NOT_RUNNING = 0, RUNNING = 1, SHUTDOWN = 2, FORCE_SHUTDOWN = 3;
     @NonFinal
@@ -31,7 +33,6 @@ class FileAccessWorker implements Runnable
     public FileAccessWorker()
     {
         this.fileAccess = new FileAccess();
-        singleThreadPool.execute(this);
     }
 
     public void start()
@@ -43,6 +44,7 @@ class FileAccessWorker implements Runnable
         log.info("STARTING FILE ACCESS WORKER");
 
         fileAccess = new FileAccess();
+        singleThreadPool = ThreadPools.singleThreadPool("file-access-worker-main");
         singleThreadPool.execute(this);
     }
 
@@ -84,7 +86,7 @@ class FileAccessWorker implements Runnable
         probes.failFastOffer(probe);
     }
 
-    public CompletableFuture<Tuple<Integer, AtomicBoolean>> registerFile(QueueConfiguration queueConfiguration)
+    public CompletableFuture<Tuple<Integer, Semaphore>> registerFile(QueueConfiguration queueConfiguration)
     {
         return fileAccess.registerFile(queueConfiguration);
     }
@@ -107,10 +109,17 @@ class FileAccessWorker implements Runnable
         waitUntilTerminated();
     }
 
+    @SneakyThrows
     private void waitUntilTerminated()
     {
-        BusyWaiter.busyWait(() -> isRunningFieldUpdater.get(this) != NOT_RUNNING, "waiting for access worker termination");
+        BusyWaiter.busyWait(() -> isRunningFieldUpdater.get(this) == NOT_RUNNING, "waiting for access worker termination");
         fileAccess = null;
+        singleThreadPool.shutdown();
+        boolean terminated = singleThreadPool.awaitTermination(30, TimeUnit.SECONDS);
+        if (!terminated)
+        {
+            throw new IllegalStateException("Cannot close file-access-worker-main pool");
+        }
     }
 
     private void setNonRunning()
@@ -140,6 +149,6 @@ class FileAccessWorker implements Runnable
 
     private void sendCloseFileMessage(Probe closeFileMessage)
     {
-        BusyWaiter.busyWait(() -> !probes.offer(closeFileMessage), "sending close file message");
+        BusyWaiter.busyWait(() -> probes.offer(closeFileMessage), "sending close file message");
     }
 }

@@ -13,12 +13,12 @@ class BusyWaiter
         double waits = 0;
         int seconds = 1;
 
-        while(condition.getAsBoolean())
+        while (!condition.getAsBoolean())
         {
             busyWait(1e3);
             waits += 1e3;
 
-            if(waits >= 1e9)
+            if (waits >= 1e9)
             {
                 log.warn("Busy wait exceeds {} seconds for {}", seconds++, conditionDescription);
                 waits = 0;
