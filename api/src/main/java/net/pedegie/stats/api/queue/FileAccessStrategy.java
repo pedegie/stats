@@ -5,18 +5,28 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 @Slf4j
 class FileAccessStrategy
 {
-    public static FileAccessContext fileAccess(QueueConfiguration configuration)
+    public static void recycle(FileAccessContext accessContext)
     {
-        return fileAccess(configuration, new AtomicBoolean());
+        var configuration = accessContext.getQueueConfiguration();
+        var offsetDateTime = newFileOffset(configuration);
+        var fileName = PathDateFormatter.appendDate(configuration.getPath(), offsetDateTime);
+        FileUtils.createFile(fileName);
+
+        var probeWriter = probeWriter(configuration, offsetDateTime);
+        var nextCycleTimestampMillis = offsetDateTime.toInstant().toEpochMilli() + configuration.getFileCycleDuration().getSeconds() * 1000;
+
+        accessContext
+                .setFileName(fileName)
+                .setNextCycleTimestampMillis(nextCycleTimestampMillis)
+                .reinitialize(probeWriter);
     }
 
-    public static FileAccessContext fileAccess(QueueConfiguration configuration, AtomicBoolean terminated)
+    public static FileAccessContext fileAccess(QueueConfiguration configuration)
     {
         var offsetDateTime = newFileOffset(configuration);
         var fileName = PathDateFormatter.appendDate(configuration.getPath(), offsetDateTime);
@@ -32,7 +42,6 @@ class FileAccessStrategy
                 .probeWriter(probeWriter)
                 .nextCycleTimestampMillis(nextCycleTimestampMillis)
                 .queueConfiguration(configuration)
-                .terminated(terminated)
                 .build();
 
     }

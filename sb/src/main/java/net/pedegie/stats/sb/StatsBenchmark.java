@@ -52,8 +52,8 @@ public class StatsBenchmark
             summary.append(i + 1).append(" warmup iteration take ").append(benchmarkResultsInMillis[i]).append(" ms\n");
         }
         summary.append("Real benchmark take ").append(benchmarkResultsInMillis[programArguments.getWarmupIterations()]).append(" ms");
-
         log.info("Benchmark finished, summary:\n{}", summary.toString());
+        StatsQueue.shutdownForce();
     }
 
     static class NamedThreadFactory implements ThreadFactory
@@ -101,7 +101,11 @@ public class StatsBenchmark
         {
             log.info("Started {} warmup iteration", iteration);
         }
-        CompletableFuture.allOf(futures).get(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
+        CompletableFuture.allOf(futures).exceptionally(t ->
+        {
+            log.error("", t);
+            return null;
+        }).get(BENCHMARK_TIMEOUT.getTimeout(), BENCHMARK_TIMEOUT.getUnit());
 
         var benchmarkDuration = toMillis(System.nanoTime() - startTimestamp);
         if (iteration == REAL_BENCHMARK)
@@ -191,7 +195,11 @@ public class StatsBenchmark
         {
             runnable.run();
             return null;
-        }, pool);
+        }, pool).exceptionally(t ->
+        {
+            log.error("", t);
+            return null;
+        });
     }
 
     private static double toMillis(long nanoSeconds)

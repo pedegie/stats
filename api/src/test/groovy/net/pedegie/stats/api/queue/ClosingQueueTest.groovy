@@ -1,6 +1,7 @@
 package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
+import spock.lang.Ignore
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -9,6 +10,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 
+@Ignore // too long, run only on MRs
 class ClosingQueueTest extends Specification
 {
     def setup()
