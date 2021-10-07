@@ -30,12 +30,7 @@ class FileAccessWorker implements Runnable
     @NonFinal
     FileAccess fileAccess;
 
-    public FileAccessWorker()
-    {
-        this.fileAccess = new FileAccess();
-    }
-
-    public void start()
+    public void start(InternalFileAccess internalFileAccess)
     {
         if (isRunning())
         {
@@ -43,7 +38,7 @@ class FileAccessWorker implements Runnable
         }
         log.info("STARTING FILE ACCESS WORKER");
 
-        fileAccess = new FileAccess();
+        fileAccess = new FileAccess(internalFileAccess);
         singleThreadPool = ThreadPools.singleThreadPool("file-access-worker-main");
         singleThreadPool.execute(this);
     }

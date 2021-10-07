@@ -18,8 +18,10 @@ import java.util.concurrent.TimeUnit;
 class FileAccess
 {
     static int FILE_ALREADY_EXISTS = 0;
+    static int ERROR_DURING_INITIALIZATION = -2;
     private static final CompletableFuture<Object> COMPLETED = CompletableFuture.completedFuture(null);
     private static final Tuple<Integer, Semaphore> FILE_ALREADY_EXISTS_TUPLE = new Tuple<>(FILE_ALREADY_EXISTS, null);
+    private static final Tuple<Integer, Semaphore> ERROR_DURING_INIT = new Tuple<>(ERROR_DURING_INITIALIZATION, null);
     private static final int TIMEOUT_SECONDS = 30;
 
     static int CLOSE_FILE_MESSAGE_ID = -1;
@@ -28,10 +30,12 @@ class FileAccess
     ExecutorService lowPriorityThreadPool = ThreadPools.boundedSingleThreadPool("lowPriorityThreadPool");
 
     TIntObjectMap<FileAccessContext> files;
+    InternalFileAccess internalFileAccess;
 
-    FileAccess()
+    FileAccess(InternalFileAccess internalFileAccess)
     {
         files = new TIntObjectHashMap<>(8);
+        this.internalFileAccess = internalFileAccess;
     }
 
     public void writeProbe(Probe probe)
@@ -43,37 +47,39 @@ class FileAccess
         if (fileAccess == null)
             return;
 
-        try
+        if (isCloseFileMessage(probe))
         {
-            if (isCloseFileMessage(probe))
+            closeAccessAsync(probe.getAccessId());
+        } else if (fileAccess.writesEnabled())
+        {
+            if (needRecycle(fileAccess, probe))
             {
-                closeFile(probe.getAccessId()).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            } else if (fileAccess.writesEnabled())
+                recycle(fileAccess, probe);
+            } else if (fileAccess.needResize())
             {
-                if (needRecycle(fileAccess, probe))
-                {
-                    recycle(fileAccess, probe);
-                } else if (fileAccess.needResize())
-                {
-                    resize(fileAccess, probe);
-                } else
-                {
-                    writeProbeToFile(fileAccess, probe);
-                }
+                resize(fileAccess, probe);
+            } else
+            {
+                writeProbeToFile(fileAccess, probe);
             }
-        } catch (Exception e)
-        {
-            log.error("Closing file access due to error while processing probe: " + probe, e);
-            //todo error handler instead of closing
-            closeFile(probe.getAccessId()).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
         }
+
     }
 
     private void writeProbeToFile(FileAccessContext fileAccess, Probe probe)
     {
-        log.trace("Writing probe: {}", probe);
-        fileAccess.writeProbe(probe);
-        log.trace("Written probe: {}", probe);
+        try
+        {
+            log.trace("Writing probe: {}", probe);
+            fileAccess.writeProbe(probe);
+            log.trace("Written probe: {}", probe);
+        } catch (Exception e)
+        {
+            if (handleError(fileAccess, e))
+            {
+                closeAccessAsync(probe.getAccessId());
+            }
+        }
     }
 
     private boolean needRecycle(FileAccessContext fileAccess, Probe probe)
@@ -81,7 +87,7 @@ class FileAccess
         return probe.getTimestamp() >= fileAccess.getNextCycleTimestampMillis();
     }
 
-    private CompletableFuture<Object> closeFile(int accessId)
+    private CompletableFuture<Object> closeAccessAsync(int accessId)
     {
         var context = files.get(accessId);
         if (context.acquireClose())
@@ -94,22 +100,30 @@ class FileAccess
                     if (context.isTerminated())
                         return;
 
-                    log.debug("Closing {}", accessId);
-
-                    var accessContext = files.remove(accessId);
-                    assert accessContext != null;
-
-                    context.close();
+                    closeAccess(accessId);
+                } catch (Exception e)
+                {
+                    handleError(context, e);
                     context.terminate();
-                    log.debug("Closed {}", accessId);
                 } finally
                 {
                     context.releaseWrites();
                 }
-            }, closeAndRegisterThreadPool);
+            }, accessId, closeAndRegisterThreadPool).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
         }
 
         return COMPLETED;
+    }
+
+    private void closeAccess(int accessId)
+    {
+        log.debug("Closing {}", accessId);
+
+        var accessContext = files.remove(accessId);
+        assert accessContext != null;
+        internalFileAccess.closeAccess(accessContext);
+
+        log.debug("Closed {}", accessId);
     }
 
     private boolean isCloseFileMessage(Probe probe)
@@ -128,18 +142,32 @@ class FileAccess
             }
             log.debug("Registering file {}", id);
 
-            var accessContext = FileAccessStrategy.fileAccess(conf);
-            preTouch(accessContext);
+            FileAccessContext accessContext = accessContext(conf);
+            if (accessContext == null)
+            {
+                return ERROR_DURING_INIT;
+            }
             files.put(id, accessContext);
-
             log.debug("File registered {}", id);
             return new Tuple<>(id, accessContext.getState());
 
-        }, closeAndRegisterThreadPool).exceptionally(throwable ->
+        }, closeAndRegisterThreadPool);
+    }
+
+    private FileAccessContext accessContext(QueueConfiguration conf)
+    {
+        FileAccessContext accessContext = null;
+        try
         {
-            log.error("", throwable);
+            accessContext = internalFileAccess.accessContext(conf);
+            preTouch(accessContext);
+            return accessContext;
+        } catch (Exception e)
+        {
+            if (conf.getErrorHandler().handle(e) && accessContext != null)
+                accessContext.close();
             return null;
-        });
+        }
     }
 
     @SneakyThrows
@@ -149,12 +177,11 @@ class FileAccess
         asyncWork(fileAccess, () ->
         {
             log.debug("Recycling file {}", probe.getAccessId());
-            fileAccess.close();
-            FileAccessStrategy.recycle(fileAccess);
+            internalFileAccess.recycle(fileAccess);
             preTouch(fileAccess);
             writeProbeToFile(fileAccess, probe);
             log.debug("File recycled {}", probe.getAccessId());
-        }, lowPriorityThreadPool).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        }, probe.getAccessId(), lowPriorityThreadPool).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     @SneakyThrows
@@ -164,15 +191,14 @@ class FileAccess
         asyncWork(fileAccess, () ->
         {
             log.debug("Resizing file {}", probe.getAccessId());
-            fileAccess.close();
-            fileAccess.mmapNextSlice();
+            internalFileAccess.resize(fileAccess);
             preTouch(fileAccess);
             writeProbeToFile(fileAccess, probe);
             log.debug("File resized {}", probe.getAccessId());
-        }, lowPriorityThreadPool).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        }, probe.getAccessId(), lowPriorityThreadPool).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
-    private CompletableFuture<Object> asyncWork(FileAccessContext fileAccess, Runnable work, Executor pool)
+    private CompletableFuture<Object> asyncWork(FileAccessContext fileAccess, Runnable work, int accessId, Executor pool)
     {
         return CompletableFuture.supplyAsync(() ->
         {
@@ -181,10 +207,21 @@ class FileAccess
             return null;
         }, pool).exceptionally(throwable ->
         {
-            log.error("", throwable);
+            if (handleError(fileAccess, throwable))
+            {
+                if (fileAccess.acquireClose())
+                {
+                    closeAccess(accessId);
+                }
+            }
             fileAccess.releaseWrites();
             return null;
         });
+    }
+
+    private boolean handleError(FileAccessContext fileAccess, Throwable throwable)
+    {
+        return fileAccess.getQueueConfiguration().getErrorHandler().handle(throwable);
     }
 
     @SneakyThrows
@@ -196,10 +233,10 @@ class FileAccess
 
         for (int i = 0; i < size; i++)
         {
-            contexts[i] = closeFile(keys[i]);
+            contexts[i] = closeAccessAsync(keys[i]);
         }
 
-        CompletableFuture.allOf(contexts).get((long) TIMEOUT_SECONDS * size, TimeUnit.SECONDS);
+        CompletableFuture.allOf(contexts).get((long) TIMEOUT_SECONDS * size, TimeUnit.SECONDS); // todo close files and release pools
         closeAndRegisterThreadPool.shutdown();
         lowPriorityThreadPool.shutdown();
 
