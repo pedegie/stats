@@ -169,7 +169,7 @@ class RecyclerTest extends Specification
     }
 
 
-    private static class SpyClock extends Clock
+    static class SpyClock extends Clock
     {
         Clock clock
 

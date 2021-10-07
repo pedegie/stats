@@ -44,6 +44,14 @@ public class QueueConfiguration
     @Getter
     @Builder.Default
     WriteFilter writeFilter = WriteFilter.acceptAllFilter();
+    @Builder.Default
+    @Getter
+    FileAccessErrorHandler errorHandler = FileAccessErrorHandler.logAndClose();
+    @Builder.Default
+    @Getter
+    InternalFileAccess internalFileAccess = new InternalFileAccess()
+    {
+    };
 
     public long getFileCycleDurationInMillis()
     {

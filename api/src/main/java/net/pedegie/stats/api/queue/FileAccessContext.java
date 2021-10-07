@@ -19,7 +19,6 @@ class FileAccessContext
 {
     @Getter
     Semaphore state;
-
     @Getter
     QueueConfiguration queueConfiguration;
     @Getter
@@ -31,7 +30,6 @@ class FileAccessContext
     @NonFinal
     ProbeWriter probeWriter;
     int mmapSize;
-
     @Getter
     @NonFinal
     ByteBuffer buffer;
@@ -119,7 +117,7 @@ class FileAccessContext
 
         if (queueConfiguration.isUnmapOnClose())
         {
-            System.gc();
+            System.gc(); // todo use chronicle unmap so we can just unmap file without GC
         }
     }
 
