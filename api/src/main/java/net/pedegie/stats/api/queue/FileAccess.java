@@ -37,7 +37,7 @@ class FileAccess
     {
         files = new TIntObjectHashMap<>(8);
         this.internalFileAccess = internalFileAccess;
-        this.timeoutMillis = Properties.get("fileaccess.timeoutthresholdmillis", 30_000 /*30 sec*/);
+        this.timeoutMillis = Properties.get("fileaccess.timeoutthresholdmillis", 30_000);
     }
 
     public void writeProbe(Probe probe)
@@ -97,20 +97,20 @@ class FileAccess
             log.trace("Acquired close for {}", accessId);
 
             return CompletableFuture.supplyAsync(() ->
-                    {
-                        try
-                        {
-                            if (context.isTerminated())
-                                return null;
-
-                            BusyWaiter.busyWait(() -> context.availablePermits() == 1, "closing file " + context.availablePermits());
-                            closeAccess(context, accessId);
-                        } finally
-                        {
-                            context.releaseClose();
-                        }
+            {
+                try
+                {
+                    if (context.isTerminated())
                         return null;
-                    }, closeAndRegisterThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
+
+                    BusyWaiter.busyWait(() -> context.availablePermits() == 1, "closing file " + context.availablePermits());
+                    closeAccess(context, accessId);
+                } finally
+                {
+                    context.releaseClose();
+                }
+                return null;
+            }, closeAndRegisterThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
         }
 
         return COMPLETED;
@@ -188,7 +188,6 @@ class FileAccess
             log.debug("Recycling file {}", probe.getAccessId());
             internalFileAccess.recycle(fileAccess);
             preTouch(fileAccess);
-            writeProbeToFile(fileAccess, probe);
             log.debug("File recycled {}", probe.getAccessId());
         }, probe.getAccessId(), lowPriorityThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
     }
@@ -202,7 +201,6 @@ class FileAccess
             log.debug("Resizing file {}", probe.getAccessId());
             internalFileAccess.resize(fileAccess);
             preTouch(fileAccess);
-            writeProbeToFile(fileAccess, probe);
             log.debug("File resized {}", probe.getAccessId());
         }, probe.getAccessId(), lowPriorityThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
     }

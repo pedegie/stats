@@ -14,7 +14,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 
-class RecyclerTest extends Specification
+class RecycleTest extends Specification
 {
     def setup()
     {
@@ -131,6 +131,8 @@ class RecyclerTest extends Specification
     def "should correctly handle situation when recycle happens between writes to queue"()
     {
         given: "create queue with one minute file cycle"
+            WaitingForRecycleInternalAccessMock internalAccessMock = new WaitingForRecycleInternalAccessMock()
+
             ZonedDateTime time = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:00:00"), ZoneId.of("UTC"))
             SpyClock spyClock = new SpyClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
             QueueConfiguration queueConfiguration = QueueConfiguration
@@ -140,6 +142,8 @@ class RecyclerTest extends Specification
                     .fileCycleDuration(Duration.of(1, ChronoUnit.MINUTES))
                     .fileCycleClock(spyClock)
                     .disableCompression(disableCompression)
+                    .errorHandler(FileAccessErrorHandler.logAndIgnore())
+                    .internalFileAccess(internalAccessMock)
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put 2 elements to queue"
@@ -147,7 +151,10 @@ class RecyclerTest extends Specification
             queue.add(5)
         and: "we set time one cycle ahead"
             spyClock.setClock(Clock.fixed(time.plus(1, ChronoUnit.MINUTES).toInstant(), ZoneId.of("UTC")))
-        and: "we put one more element"
+        and: "we put one more element and wait until recycles"
+            queue.add(5)
+            BusyWaiter.busyWait({ internalAccessMock.recycled() }, "recycle termination (test)")
+        and: "we put one more elements, previous one was dropped during recycle"
             queue.add(5)
             queue.closeBlocking()
         then: "it should create second file representing next one-minute cycle"
@@ -199,6 +206,23 @@ class RecyclerTest extends Specification
         void setClock(Clock clock)
         {
             this.clock = clock
+        }
+    }
+
+    private static class WaitingForRecycleInternalAccessMock extends InternalFileAccessMock
+    {
+        FileAccessContext context
+
+        @Override
+        void recycle(FileAccessContext fileAccess)
+        {
+            context = fileAccess
+            super.recycle(fileAccess)
+        }
+
+        boolean recycled()
+        {
+            return context != null && context.writesEnabled()
         }
     }
 }

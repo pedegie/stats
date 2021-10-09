@@ -39,7 +39,7 @@ class InternalFileAccessMock implements InternalFileAccess
     void recycle(FileAccessContext accessContext)
     {
         if (onRecycle == null)
-            new InternalFileAccess() {}.closeAccess(accessContext)
+            new InternalFileAccess() {}.recycle(accessContext)
         else
             onRecycle.accept(accessContext)
     }
@@ -48,7 +48,7 @@ class InternalFileAccessMock implements InternalFileAccess
     void resize(FileAccessContext fileAccess)
     {
         if (onResize == null)
-            new InternalFileAccess() {}.closeAccess(fileAccess)
+            new InternalFileAccess() {}.resize(fileAccess)
         else
             onResize.accept(fileAccess)
     }
