@@ -8,7 +8,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.Path
 
-class ContinuousWritesTest extends Specification
+class ResizeTest extends Specification
 {
     def setup()
     {
@@ -28,9 +28,12 @@ class ContinuousWritesTest extends Specification
     def "should continuously allocate mmap files"()
     {
         given:
+            WaitingForResizeInternalAccessMock internalAccessMock = new WaitingForResizeInternalAccessMock()
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .mmapSize(OS.pageSize())
+                    .internalFileAccess(internalAccessMock)
                     .path(TestQueueUtil.PATH)
+                    .errorHandler(FileAccessErrorHandler.logAndIgnore())
                     .disableCompression(disableCompression)
                     .build()
 
@@ -40,11 +43,14 @@ class ContinuousWritesTest extends Specification
         when: "we put one element more than mmap size"
             elementsToFillWholeBuffer.each { queue.add(it) }
             queue.add(5)
+        then: "we put one more element, due dropping previous one due resize"
+            BusyWaiter.busyWait({ internalAccessMock.resized() }, "resize termination (test)")
+            queue.add(5)
             queue.closeBlocking()
-        then:
+        and:
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
             ByteBuffer probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
-            probes.getInt(probes.limit() - probeSize) == elementsToFillWholeBuffer.length + 1
+            probes.limit() == (elementsToFillWholeBuffer.length + 1) * probeSize + headerSize
         where:
             disableCompression << [true, false]
             probeSize << [DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM, CompressedProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM]
@@ -54,8 +60,11 @@ class ContinuousWritesTest extends Specification
     def "should be able to append to log file when whole mmaped memory is dirty"()
     {
         given:
+            WaitingForResizeInternalAccessMock internalAccessMock = new WaitingForResizeInternalAccessMock()
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .internalFileAccess(internalAccessMock)
+                    .errorHandler(FileAccessErrorHandler.logAndIgnore())
                     .mmapSize(OS.pageSize())
                     .disableCompression(disableCompression)
                     .build()
@@ -74,6 +83,9 @@ class ContinuousWritesTest extends Specification
         when: "we put one more probe"
             queue = TestQueueUtil.createQueue(queueConfiguration)
             queue.add(5)
+        and: "we put one more element, due dropping previous one due resize"
+            BusyWaiter.busyWait({ internalAccessMock.resized() }, "resize termination (test)")
+            queue.add(5)
             queue.closeBlocking()
             probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
         then: "there is additional probe"
@@ -89,8 +101,11 @@ class ContinuousWritesTest extends Specification
     def "should be able to mmap more memory than 2GB"()
     {
         given:
+            WaitingForResizeInternalAccessMock internalAccessMock = new WaitingForResizeInternalAccessMock()
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .mmapSize(Integer.MAX_VALUE)
+                    .errorHandler(FileAccessErrorHandler.logAndIgnore())
+                    .internalFileAccess(internalAccessMock)
                     .disableCompression(disableCompression)
                     .path(TestQueueUtil.PATH)
                     .build()
@@ -98,12 +113,14 @@ class ContinuousWritesTest extends Specification
             StatsQueue queue = TestQueueUtil.createQueue(queueConfiguration)
 
             int[] elementsToFillWholeBuffer = allocate(queueConfiguration, probeSize, headerSize)
-        when:
+        when: "we put enough elements to fill whole 2GB buffer"
             for (int i = 0; i < elementsToFillWholeBuffer.length; i++)
             {
                 queue.add(elementsToFillWholeBuffer[i])
             }
             queue.add(1)
+        and: "we put one more element, due dropping previous one due resize"
+            BusyWaiter.busyWait({ internalAccessMock.resized() }, "resize termination (test)")
             queue.add(1)
             queue.closeBlocking()
         then:
@@ -118,5 +135,22 @@ class ContinuousWritesTest extends Specification
     {
         int elements = (int) ((int) (queueConfiguration.mmapSize / probeSize) - (headerSize / probeSize))
         return new int[elements]
+    }
+
+    private static class WaitingForResizeInternalAccessMock extends InternalFileAccessMock
+    {
+        FileAccessContext context
+
+        @Override
+        void resize(FileAccessContext fileAccess)
+        {
+            context = fileAccess
+            super.resize(fileAccess)
+        }
+
+        boolean resized()
+        {
+            return context != null && context.writesEnabled()
+        }
     }
 }

@@ -75,7 +75,7 @@ class ErrorHandlerTest extends Specification
     {
         given:
             ZonedDateTime time = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:00:00"), ZoneId.of("UTC"))
-            RecyclerTest.SpyClock spyClock = new RecyclerTest.SpyClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
+            RecycleTest.SpyClock spyClock = new RecycleTest.SpyClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
             InternalFileAccessMock accessMock = new InternalFileAccessMock()
             accessMock.onRecycle = { throw new TestExpectedException("") }
 
@@ -214,7 +214,7 @@ class ErrorHandlerTest extends Specification
             FileAccessErrorHandler errorHandler = Mock(FileAccessErrorHandler)
             errorHandler.handle(_) >> false
             ZonedDateTime time = ZonedDateTime.of(LocalDateTime.parse("2020-01-03T00:00:00"), ZoneId.of("UTC"))
-            RecyclerTest.SpyClock spyClock = new RecyclerTest.SpyClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
+            RecycleTest.SpyClock spyClock = new RecycleTest.SpyClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
 
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
