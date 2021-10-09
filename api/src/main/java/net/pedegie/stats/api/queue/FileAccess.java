@@ -7,6 +7,7 @@ import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -19,15 +20,15 @@ class FileAccess
 {
     static int FILE_ALREADY_EXISTS = 0;
     static int ERROR_DURING_INITIALIZATION = -2;
+    static int CLOSE_FILE_MESSAGE_ID = -1;
+
     private static final CompletableFuture<Object> COMPLETED = CompletableFuture.completedFuture(null);
     private static final Tuple<Integer, Semaphore> FILE_ALREADY_EXISTS_TUPLE = new Tuple<>(FILE_ALREADY_EXISTS, null);
     private static final Tuple<Integer, Semaphore> ERROR_DURING_INIT = new Tuple<>(ERROR_DURING_INITIALIZATION, null);
-    private static final int TIMEOUT_SECONDS = 30;
+    private final int timeoutMillis;
 
-    static int CLOSE_FILE_MESSAGE_ID = -1;
-
-    ExecutorService closeAndRegisterThreadPool = ThreadPools.singleThreadPool("closeAndRegisterThreadPool");
-    ExecutorService lowPriorityThreadPool = ThreadPools.boundedSingleThreadPool("lowPriorityThreadPool");
+    ExecutorService closeAndRegisterThreadPool = ThreadPools.singleThreadPool("closeAndRegisterThreadPool_" + UUID.randomUUID());
+    ExecutorService lowPriorityThreadPool = ThreadPools.boundedSingleThreadPool("lowPriorityThreadPool _" + UUID.randomUUID());
 
     TIntObjectMap<FileAccessContext> files;
     InternalFileAccess internalFileAccess;
@@ -36,6 +37,7 @@ class FileAccess
     {
         files = new TIntObjectHashMap<>(8);
         this.internalFileAccess = internalFileAccess;
+        this.timeoutMillis = Properties.get("fileaccess.timeoutthresholdmillis", 30_000 /*30 sec*/);
     }
 
     public void writeProbe(Probe probe)
@@ -92,38 +94,50 @@ class FileAccess
         var context = files.get(accessId);
         if (context.acquireClose())
         {
-            return asyncWork(context, () ->
-            {
-                try
-                {
-                    BusyWaiter.busyWait(() -> context.availablePermits() == 1, "closing file ");
-                    if (context.isTerminated())
-                        return;
+            log.trace("Acquired close for {}", accessId);
 
-                    closeAccess(accessId);
-                } catch (Exception e)
-                {
-                    handleError(context, e);
-                    context.terminate();
-                } finally
-                {
-                    context.releaseWrites();
-                }
-            }, accessId, closeAndRegisterThreadPool).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            return CompletableFuture.supplyAsync(() ->
+                    {
+                        try
+                        {
+                            if (context.isTerminated())
+                                return null;
+
+                            BusyWaiter.busyWait(() -> context.availablePermits() == 1, "closing file " + context.availablePermits());
+                            closeAccess(context, accessId);
+                        } finally
+                        {
+                            context.releaseClose();
+                        }
+                        return null;
+                    }, closeAndRegisterThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
+                    .exceptionally(t ->
+                    {
+                        log.error("ERRRORRR", t);
+                        return null;
+                    });
         }
 
         return COMPLETED;
     }
 
-    private void closeAccess(int accessId)
+    private void closeAccess(FileAccessContext fileAccess, int accessId)
     {
-        log.debug("Closing {}", accessId);
-
-        var accessContext = files.remove(accessId);
-        assert accessContext != null;
-        internalFileAccess.closeAccess(accessContext);
-
-        log.debug("Closed {}", accessId);
+        try
+        {
+            log.debug("Closing {}", accessId);
+            internalFileAccess.closeAccess(fileAccess);
+            var accessContext = files.remove(accessId);
+            assert accessContext != null;
+            log.debug("Closed {}", accessId);
+        } catch (Exception e)
+        {
+            log.error("Error occurred during closing file, removing file but resources may be not released! (leak)");
+            handleError(fileAccess, e);
+        } finally
+        {
+            fileAccess.terminate();
+        }
     }
 
     private boolean isCloseFileMessage(Probe probe)
@@ -181,7 +195,7 @@ class FileAccess
             preTouch(fileAccess);
             writeProbeToFile(fileAccess, probe);
             log.debug("File recycled {}", probe.getAccessId());
-        }, probe.getAccessId(), lowPriorityThreadPool).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        }, probe.getAccessId(), lowPriorityThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
     }
 
     @SneakyThrows
@@ -195,7 +209,7 @@ class FileAccess
             preTouch(fileAccess);
             writeProbeToFile(fileAccess, probe);
             log.debug("File resized {}", probe.getAccessId());
-        }, probe.getAccessId(), lowPriorityThreadPool).orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        }, probe.getAccessId(), lowPriorityThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
     }
 
     private CompletableFuture<Object> asyncWork(FileAccessContext fileAccess, Runnable work, int accessId, Executor pool)
@@ -211,7 +225,7 @@ class FileAccess
             {
                 if (fileAccess.acquireClose())
                 {
-                    closeAccess(accessId);
+                    closeAccess(fileAccess, accessId);
                 }
             }
             fileAccess.releaseWrites();
@@ -227,33 +241,61 @@ class FileAccess
     @SneakyThrows
     public void closeAllBlocking()
     {
-        CompletableFuture[] contexts = new CompletableFuture[files.size()];
         var keys = files.keys();
-        var size = keys.length;
 
-        for (int i = 0; i < size; i++)
-        {
-            contexts[i] = closeAccessAsync(keys[i]);
-        }
+        log.debug("Closing {} files", keys.length);
 
-        CompletableFuture.allOf(contexts).get((long) TIMEOUT_SECONDS * size, TimeUnit.SECONDS); // todo close files and release pools
+        tryCloseBlocking(keys);
+
         closeAndRegisterThreadPool.shutdown();
         lowPriorityThreadPool.shutdown();
 
-        boolean closed1 = closeAndRegisterThreadPool.awaitTermination(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        boolean closed2 = lowPriorityThreadPool.awaitTermination(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        var size = files.size();
+        var timeout = size == 0 ? 100 : timeoutMillis * size;
+        boolean closed1 = closeAndRegisterThreadPool.awaitTermination(timeout, TimeUnit.MILLISECONDS);
+        size = files.size();
+        timeout = size == 0 ? 100 : timeoutMillis * size;
+        boolean closed2 = lowPriorityThreadPool.awaitTermination(timeout, TimeUnit.MILLISECONDS);
+
+        keys = files.keys();
+
+        for (int accessId : keys)
+        {
+            var accessContextWhichCannotBeClosedForSomeReason = files.remove(accessId);
+            if (accessContextWhichCannotBeClosedForSomeReason != null)
+            {
+                log.error("Cannot close {}. Removing file and releasing thread resources, file might still be mapped! (leak)", accessId);
+                accessContextWhichCannotBeClosedForSomeReason.terminate();
+            }
+        }
+
+        assert files.size() == 0;
 
         if (!closed1)
         {
-            throw new IllegalStateException("Cannot close pool " + "closeAndRegisterThreadPool");
+            log.error("Cannot close pool {}", "closeAndRegisterThreadPool");
         }
 
         if (!closed2)
         {
-            throw new IllegalStateException("Cannot close pool " + "lowPriorityThreadPool");
+            log.error("Cannot close pool {}", "lowPriorityThreadPool");
+        }
+    }
+
+    private void tryCloseBlocking(int[] keys)
+    {
+        for (int accessId : keys)
+        {
+            closeAccessAsync(accessId).handle((unused, throwable) ->
+            {
+                if (throwable != null)
+                {
+                    log.error("Timeout during closing file {}, trying again in a while", accessId, throwable);
+                }
+                return unused;
+            }).join();
         }
 
-        assert files.size() == 0;
     }
 
     private void preTouch(FileAccessContext accessContext)

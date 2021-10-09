@@ -21,6 +21,7 @@ class DefaultProbeWriter implements ProbeWriter, Recoverable
             var index = CrashRecovery.recover(accessContext, this);
             buffer.position(index);
         }
+        log.trace("{} Initialized", this.getClass().getName());
     }
 
     private boolean itsNotNewBuffer(ByteBuffer buffer)

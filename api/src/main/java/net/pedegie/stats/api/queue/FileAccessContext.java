@@ -15,7 +15,7 @@ import java.util.concurrent.Semaphore;
 import java.util.function.Function;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
-class FileAccessContext
+public class FileAccessContext
 {
     @Getter
     Semaphore state;
@@ -87,6 +87,12 @@ class FileAccessContext
     {
         state.release(1);
     }
+
+    public void releaseClose()
+    {
+        state.release(2);
+    }
+
 
     public void mmapNextSlice()
     {

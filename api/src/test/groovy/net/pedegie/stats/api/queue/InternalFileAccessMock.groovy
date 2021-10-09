@@ -10,13 +10,20 @@ class InternalFileAccessMock implements InternalFileAccess
     Consumer<FileAccessContext> onRecycle
     Consumer<FileAccessContext> onResize
 
+    private final InternalFileAccess fileAccess
+
+    InternalFileAccessMock()
+    {
+        this.fileAccess = new InternalFileAccess() {}
+    }
+
     @Override
     void closeAccess(FileAccessContext accessContext)
     {
-        if (onClose == null)
-            new InternalFileAccess() {}.closeAccess(accessContext)
-        else
+        if (onClose != null)
             onClose.accept(accessContext)
+
+        fileAccess.closeAccess(accessContext)
     }
 
     @Override

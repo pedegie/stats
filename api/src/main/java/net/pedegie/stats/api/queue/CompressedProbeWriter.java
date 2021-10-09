@@ -48,7 +48,7 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
             log.debug("Found compressed file {}, appending to index: {}", accessContext.getFileName(), index);
         }
         this.startCycleTimestamp = startCycleTimestamp;
-
+        log.trace("{} Initialized", this.getClass().getName());
     }
 
     private boolean itsNewFile(long timestamp)
