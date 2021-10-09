@@ -10,7 +10,8 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 
-@Ignore // too long, run only on MRs
+@Ignore
+// too long, run only on MRs
 class ClosingQueueTest extends Specification
 {
     def setup()
@@ -120,6 +121,33 @@ class ClosingQueueTest extends Specification
         and: "its missing some probes in files"
             ByteBuffer.wrap(Files.readAllBytes(TestQueueUtil.findExactlyOneOrThrow(path1))).limit() != 2 * 12
             ByteBuffer.wrap(Files.readAllBytes(TestQueueUtil.findExactlyOneOrThrow(path2))).limit() != 2 * 12
+    }
+
+    def "should close all queues irrespective of their state on timeout threshold during shutdown()"()
+    {
+        given: "3 queues with different close duration sleep"
+            Properties.add("fileaccess.timeoutthresholdmillis", 1000)
+            InternalFileAccessMock accessMock = new InternalFileAccessMock()
+            accessMock.onClose = { FileAccessContext accessContext -> sleep(1000 * closeSleep) }
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .disableCompression(true)
+                    .internalFileAccess(accessMock)
+                    .mmapSize(OS.pageSize())
+                    .errorHandler(FileAccessErrorHandler.logAndClose())
+                    .probeWriter(ProbeWriter.defaultProbeWriter())
+                    .build()
+        when:
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
+            long start = System.nanoTime()
+            StatsQueue.shutdown()
+            long elapsed = System.nanoTime() - start
+        then:
+            println(elapsed)
+            queue.isClosed()
+            elapsed < 2.3e9
+        where:
+            closeSleep << [0, 1, 2, 3, 4]
     }
 
 

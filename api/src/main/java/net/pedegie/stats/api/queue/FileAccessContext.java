@@ -88,6 +88,12 @@ class FileAccessContext
         state.release(1);
     }
 
+    public void releaseClose()
+    {
+        state.release(2);
+    }
+
+
     public void mmapNextSlice()
     {
         mmapNextSlice(fileName);

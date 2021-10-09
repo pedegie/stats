@@ -13,7 +13,7 @@ class BusyWaiter
         double waits = 0;
         int seconds = 1;
 
-        while (!condition.getAsBoolean())
+        while (!Thread.currentThread().isInterrupted() && !condition.getAsBoolean())
         {
             busyWait(1e3);
             waits += 1e3;

@@ -36,9 +36,11 @@ class FileAccessWorker implements Runnable
         {
             return;
         }
-        log.info("STARTING FILE ACCESS WORKER");
+        log.debug("STARTING {}", this.getClass().getSimpleName());
+        probes.clear();
 
         fileAccess = new FileAccess(internalFileAccess);
+        assert singleThreadPool == null || singleThreadPool.isTerminated();
         singleThreadPool = ThreadPools.singleThreadPool("file-access-worker-main");
         singleThreadPool.execute(this);
     }
@@ -91,8 +93,8 @@ class FileAccessWorker implements Runnable
      */
     public void shutdown()
     {
-        isRunningFieldUpdater.compareAndSet(this, RUNNING, SHUTDOWN);
-        waitUntilTerminated();
+        if (isRunningFieldUpdater.compareAndSet(this, RUNNING, SHUTDOWN))
+            waitUntilTerminated();
     }
 
     /**
@@ -100,13 +102,15 @@ class FileAccessWorker implements Runnable
      */
     public void shutdownForce()
     {
-        isRunningFieldUpdater.compareAndSet(this, RUNNING, FORCE_SHUTDOWN);
-        waitUntilTerminated();
+        if (isRunningFieldUpdater.compareAndSet(this, RUNNING, FORCE_SHUTDOWN))
+            waitUntilTerminated();
     }
 
     @SneakyThrows
     private void waitUntilTerminated()
     {
+        log.debug("Waits until terminated");
+
         BusyWaiter.busyWait(() -> isRunningFieldUpdater.get(this) == NOT_RUNNING, "waiting for access worker termination");
         fileAccess = null;
         singleThreadPool.shutdown();
@@ -115,6 +119,7 @@ class FileAccessWorker implements Runnable
         {
             throw new IllegalStateException("Cannot close file-access-worker-main pool");
         }
+        log.debug("{} terminated.", this.getClass().getSimpleName());
     }
 
     private void setNonRunning()
