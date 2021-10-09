@@ -15,7 +15,7 @@ import java.util.concurrent.Semaphore;
 import java.util.function.Function;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
-public class FileAccessContext
+class FileAccessContext
 {
     @Getter
     Semaphore state;

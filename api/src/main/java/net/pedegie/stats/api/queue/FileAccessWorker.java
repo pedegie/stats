@@ -119,7 +119,7 @@ class FileAccessWorker implements Runnable
         {
             throw new IllegalStateException("Cannot close file-access-worker-main pool");
         }
-        log.debug("TERMINATED");
+        log.debug("{} terminated.", this.getClass().getSimpleName());
     }
 
     private void setNonRunning()

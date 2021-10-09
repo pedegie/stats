@@ -110,12 +110,7 @@ class FileAccess
                             context.releaseClose();
                         }
                         return null;
-                    }, closeAndRegisterThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
-                    .exceptionally(t ->
-                    {
-                        log.error("ERRRORRR", t);
-                        return null;
-                    });
+                    }, closeAndRegisterThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
         }
 
         return COMPLETED;

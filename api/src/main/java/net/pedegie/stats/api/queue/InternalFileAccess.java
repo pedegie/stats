@@ -1,6 +1,6 @@
 package net.pedegie.stats.api.queue;
 
-public interface InternalFileAccess
+interface InternalFileAccess
 {
     default void closeAccess(FileAccessContext accessContext)
     {
