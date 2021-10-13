@@ -168,5 +168,29 @@ class TimeoutsExceedsTest extends Specification
     }
 
 
-    // def "should correctly handle situation when timeout occurs during closing file because of timeout during reycle / resize" // todo
+    def "should correctly handle situation when timeout occurs during closing file because of waiting until resize/recycle finishes"()
+    {
+        given:
+            FileAccessErrorHandler errorHandler = Mock(FileAccessErrorHandler)
+            errorHandler.errorOnResize(_) >> false
+            InternalFileAccessMock fileAccessMock = new InternalFileAccessMock()
+            fileAccessMock.onResize = [{ sleep(SLEEP_MILLIS) }, {}].iterator()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .disableCompression(true)
+                    .internalFileAccess(fileAccessMock)
+                    .errorHandler(errorHandler)
+                    .mmapSize(OS.pageSize())
+                    .build()
+        and: "set timeout"
+            Properties.add("fileaccess.timeoutthresholdmillis", TIMEOUT_THRESHOLD_MILLIS)
+        when:
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
+            int[] elementsToFillWholeBuffer = new int[(queueConfiguration.mmapSize / 12)]
+            elementsToFillWholeBuffer.each { queue.add(it) }
+            queue.add(1)
+            queue.closeBlocking()
+        then:
+            1 * errorHandler.errorOnClosingFile(_)
+    }
 }
