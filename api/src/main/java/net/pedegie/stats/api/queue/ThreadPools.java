@@ -33,7 +33,7 @@ class ThreadPools
                 namedThreadFactory(poolName));
     }
 
-    private static ThreadFactory namedThreadFactory(String poolName)
+    public static ThreadFactory namedThreadFactory(String poolName)
     {
         return r -> new Thread(r, poolName);
     }

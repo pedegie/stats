@@ -15,11 +15,11 @@ class FileAccessStrategy
         var configuration = accessContext.getQueueConfiguration();
         var offsetDateTime = newFileOffset(configuration);
         var fileName = PathDateFormatter.appendDate(configuration.getPath(), offsetDateTime);
-        FileUtils.createFile(fileName);
 
         var probeWriter = probeWriter(configuration, offsetDateTime);
         var nextCycleTimestampMillis = offsetDateTime.toInstant().toEpochMilli() + configuration.getFileCycleDuration().getSeconds() * 1000;
 
+        FileUtils.createFile(fileName);
         accessContext
                 .setFileName(fileName)
                 .setNextCycleTimestampMillis(nextCycleTimestampMillis)

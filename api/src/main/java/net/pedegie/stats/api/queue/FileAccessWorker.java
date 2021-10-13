@@ -9,7 +9,6 @@ import org.jctools.queues.MpscArrayQueue;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
@@ -83,7 +82,7 @@ class FileAccessWorker implements Runnable
         probes.failFastOffer(probe);
     }
 
-    public CompletableFuture<Tuple<Integer, Semaphore>> registerFile(QueueConfiguration queueConfiguration)
+    public CompletableFuture<RegisterFileResponse> registerFile(QueueConfiguration queueConfiguration)
     {
         return fileAccess.registerFile(queueConfiguration);
     }
@@ -109,7 +108,7 @@ class FileAccessWorker implements Runnable
     @SneakyThrows
     private void waitUntilTerminated()
     {
-        log.debug("Waits until terminated");
+        log.trace("Waits until terminated");
 
         BusyWaiter.busyWait(() -> isRunningFieldUpdater.get(this) == NOT_RUNNING, "waiting for access worker termination");
         fileAccess = null;
@@ -119,7 +118,7 @@ class FileAccessWorker implements Runnable
         {
             throw new IllegalStateException("Cannot close file-access-worker-main pool");
         }
-        log.debug("{} terminated.", this.getClass().getSimpleName());
+        log.trace("{} terminated.", this.getClass().getSimpleName());
     }
 
     private void setNonRunning()

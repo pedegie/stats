@@ -46,7 +46,7 @@ public class QueueConfiguration
     WriteFilter writeFilter = WriteFilter.acceptAllFilter();
     @Builder.Default
     @Getter
-    FileAccessErrorHandler errorHandler = FileAccessErrorHandler.logAndClose();
+    FileAccessErrorHandler errorHandler = FileAccessErrorHandler.logAndIgnore();
     @Builder.Default
     @Getter
     InternalFileAccess internalFileAccess = new InternalFileAccess()

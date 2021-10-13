@@ -14,9 +14,6 @@ import java.time.Clock;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
 @Slf4j
@@ -26,10 +23,8 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     Clock fileCycleClock;
     Queue<T> queue;
     Counter count;
-    Lock closeLock;
     WriteFilter writeFilter;
-    Semaphore closed;
-    private final int fileAccessId;
+    RegisterFileResponse registerResult;
 
     @Builder
     @SneakyThrows
@@ -40,20 +35,15 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         this.queue = queue;
         this.writeFilter = queueConfiguration.getWriteFilter();
         this.count = queueConfiguration.getSynchronizer().newCounter();
-        this.closeLock = queueConfiguration.getSynchronizer().newLock();
         this.fileCycleClock = queueConfiguration.getFileCycleClock();
         fileAccessWorker.start(queueConfiguration.getInternalFileAccess());
-        var registerResult = fileAccessWorker.registerFile(queueConfiguration).orTimeout(30, TimeUnit.SECONDS).join();
-        this.fileAccessId = registerResult.getA();
 
-        if (fileAccessId == FileAccess.ERROR_DURING_INITIALIZATION)
+        this.registerResult = fileAccessWorker.registerFile(queueConfiguration).join();
+        if (registerResult.isErrorDuringInit())
             throw new IllegalStateException("Error occurred during initialization");
 
-        if (fileAccessId == FileAccess.FILE_ALREADY_EXISTS)
+        if (registerResult.isFileAlreadyExists())
             throw new IllegalArgumentException("Queue which appends to " + queueConfiguration.getPath() + " already exists");
-
-        this.closed = registerResult.getB();
-
     }
 
     private void logConfiguration(QueueConfiguration conf)
@@ -254,42 +244,34 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     {
         if (writeFilter.shouldWrite(count, time))
         {
-            fileAccessWorker.writeProbe(new Probe(fileAccessId, count, time));
+            fileAccessWorker.writeProbe(new Probe(registerResult.getFileAccessId(), count, time));
         }
     }
 
     @Override
     public void close()
     {
-        if (closeLock.tryLock())
-        {
-            try
-            {
-                if (isClosed())
-                    return;
+        if (isTerminated())
+            return;
 
-                fileAccessWorker.close(fileAccessId);
-            } finally
-            {
-                closeLock.unlock();
-            }
-        }
+        fileAccessWorker.close(registerResult.getFileAccessId());
     }
 
     public void closeBlocking()
     {
+        var notClosedYet = notClosed();
         close();
-        BusyWaiter.busyWait(this::isClosed, "close blocking");
+        BusyWaiter.busyWait(() -> notClosedYet ? !notClosed() : isTerminated(), "close blocking");
     }
 
     private boolean notClosed()
     {
-        return !isClosed();
+        return registerResult.notClosed();
     }
 
-    public boolean isClosed()
+    public boolean isTerminated()
     {
-        return closed.availablePermits() >= 4;
+        return registerResult.isTerminated();
     }
 
     public static void shutdown()

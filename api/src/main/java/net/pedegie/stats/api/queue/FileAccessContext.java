@@ -12,11 +12,16 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 class FileAccessContext
 {
+    private static final int CLOSE_ONLY = 5;
+    static final int ALL_PERMITS = 4;
+    static final int TERMINATED = 6;
+
     @Getter
     Semaphore state;
     @Getter
@@ -50,7 +55,7 @@ class FileAccessContext
         this.mmapSize = mmapSize;
         mmapNextSlice();
         this.probeWriter = probeWriter.apply(this);
-        state = new Semaphore(3);
+        state = new Semaphore(0);
     }
 
     public void writeProbe(Probe probe)
@@ -58,29 +63,25 @@ class FileAccessContext
         probeWriter.writeProbe(buffer, probe);
     }
 
-    boolean writesEnabled()
+    public void enableAccess()
     {
-        return state.availablePermits() == 3;
+        state.release(ALL_PERMITS);
     }
 
-    int availablePermits()
+    boolean writesEnabled()
     {
-        return state.availablePermits();
+        return state.availablePermits() == ALL_PERMITS;
     }
 
     void acquireWrites()
     {
-        acquireWrites(1);
+        assert state.tryAcquire(1);
     }
 
-    boolean acquireClose()
+    @SneakyThrows
+    boolean acquireWritesBlocking(long timeout, TimeUnit timeUnit)
     {
-        return acquireWrites(2);
-    }
-
-    private boolean acquireWrites(int writes)
-    {
-        return state.tryAcquire(writes);
+        return state.tryAcquire(timeout, timeUnit);
     }
 
     public void releaseWrites()
@@ -88,11 +89,25 @@ class FileAccessContext
         state.release(1);
     }
 
-    public void releaseClose()
+    boolean acquireClose()
     {
-        state.release(2);
+        return state.tryAcquire(3);
     }
 
+    public void closeOnly()
+    {
+        setState(CLOSE_ONLY);
+    }
+
+    public void terminate()
+    {
+        setState(TERMINATED);
+    }
+
+    private void setState(int newState)
+    {
+        state.release(newState - state.availablePermits());
+    }
 
     public void mmapNextSlice()
     {
@@ -113,28 +128,27 @@ class FileAccessContext
     }
 
     @SneakyThrows
-    void close()
+    void close() // idempotent
     {
-        fileSize += buffer.position();
-        channel.truncate(fileSize);
-        fileAccess.close();
-        this.channel = null;
-        this.fileAccess = null;
-
+        if (buffer != null)
+        {
+            fileSize += buffer.position();
+            buffer = null;
+        }
+        if (channel != null)
+        {
+            channel.truncate(fileSize);
+            channel = null;
+        }
+        if (fileAccess != null)
+        {
+            fileAccess.close();
+            fileAccess = null;
+        }
         if (queueConfiguration.isUnmapOnClose())
         {
             System.gc(); // todo use chronicle unmap so we can just unmap file without GC
         }
-    }
-
-    void terminate()
-    {
-        state.release(4);
-    }
-
-    boolean isTerminated()
-    {
-        return state.availablePermits() >= 4;
     }
 
     public FileAccessContext setFileName(Path fileName)
@@ -155,4 +169,5 @@ class FileAccessContext
         mmapNextSlice();
         this.probeWriter = probeWriter.apply(this);
     }
+
 }

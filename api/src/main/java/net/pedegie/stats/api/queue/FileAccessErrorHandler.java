@@ -2,28 +2,54 @@ package net.pedegie.stats.api.queue;
 
 public interface FileAccessErrorHandler
 {
-    static FileAccessErrorHandler logAndClose()
+
+    default void errorOnCreatingFile(Throwable throwable)
     {
-        return throwable ->
-        {
-            Logger.error(throwable);
-            return true;
-        };
     }
 
-    static FileAccessErrorHandler logAndIgnore()
+    /**
+     * @param throwable t
+     * @return true if file should be closed and all resources released, false otherwise, default is false
+     */
+
+    default boolean errorOnProbeWrite(Throwable throwable)
     {
-        return throwable ->
-        {
-            Logger.error(throwable);
-            return false;
-        };
+        return false;
+    }
+
+    /**
+     * @param throwable t
+     * @return true if file should be closed and all resources released, false otherwise, default is false
+     */
+    default boolean errorOnResize(Throwable throwable)
+    {
+        return false;
+    }
+
+    /**
+     * @param throwable t
+     * @return true if file should be closed and all resources released, false otherwise, default is false
+     */
+    default boolean errorOnRecycle(Throwable throwable)
+    {
+        return false;
     }
 
 
     /**
+     * File goes into CLOSE_ONLY state if error throws during closing, what means it will accept only CLOSE_FILE probe messages and
+     * ignore all the rest
+     *
      * @param throwable t
-     * @return true if file should be closed and all resources released, false otherwise
      */
-    boolean handle(Throwable throwable);
+    default void errorOnClosingFile(Throwable throwable)
+    {
+
+    }
+
+
+    static FileAccessErrorHandler logAndIgnore()
+    {
+        return LogAndIgnoreFileAccessErrorHandler.INSTANCE;
+    }
 }

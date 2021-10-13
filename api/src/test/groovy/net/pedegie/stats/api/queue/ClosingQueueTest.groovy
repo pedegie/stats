@@ -49,10 +49,10 @@ class ClosingQueueTest extends Specification
         then: "it should take less than 2 seconds to order a close message"
             TimeUnit.SECONDS.convert(elapsed, TimeUnit.NANOSECONDS) < 2
         and: "queue is not closed yet"
-            !queue.isClosed()
+            !queue.isTerminated()
         and: "its closed after 3 seconds"
             sleep(3000)
-            queue.isClosed()
+            queue.isTerminated()
     }
 
     def "should close queue synchronously on closeBlocking"()
@@ -74,7 +74,7 @@ class ClosingQueueTest extends Specification
             long elapsed = System.nanoTime() - start
         then: "it should take more than 2 seconds to close queue"
             TimeUnit.SECONDS.convert(elapsed, TimeUnit.NANOSECONDS) >= 2
-            queue.isClosed()
+            queue.isTerminated()
     }
 
     def "should terminate all queues on shutdown but process all remaining probes"()
@@ -93,8 +93,8 @@ class ClosingQueueTest extends Specification
             queue2.add(1)
             StatsQueue.shutdown()
         then: "both queues are closed"
-            queue1.isClosed()
-            queue2.isClosed()
+            queue1.isTerminated()
+            queue2.isTerminated()
         and: "there are all probes in both files"
             ByteBuffer.wrap(Files.readAllBytes(TestQueueUtil.findExactlyOneOrThrow(path1))).limit() == 2 * 12
             ByteBuffer.wrap(Files.readAllBytes(TestQueueUtil.findExactlyOneOrThrow(path2))).limit() == 2 * 12
@@ -116,8 +116,8 @@ class ClosingQueueTest extends Specification
             queue2.add(1)
             StatsQueue.shutdownForce()
         then: "both queues are closed"
-            queue1.isClosed()
-            queue2.isClosed()
+            queue1.isTerminated()
+            queue2.isTerminated()
         and: "its missing some probes in files"
             ByteBuffer.wrap(Files.readAllBytes(TestQueueUtil.findExactlyOneOrThrow(path1))).limit() != 2 * 12
             ByteBuffer.wrap(Files.readAllBytes(TestQueueUtil.findExactlyOneOrThrow(path2))).limit() != 2 * 12
@@ -128,14 +128,12 @@ class ClosingQueueTest extends Specification
         given: "3 queues with different close duration sleep"
             Properties.add("fileaccess.timeoutthresholdmillis", 1000)
             InternalFileAccessMock accessMock = new InternalFileAccessMock()
-            accessMock.onClose = { FileAccessContext accessContext -> sleep(1000 * closeSleep) }
+            accessMock.onClose = { FileAccessContext accessContext -> sleep(1000 * closeSleep) }.iterator()
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .disableCompression(true)
                     .internalFileAccess(accessMock)
                     .mmapSize(OS.pageSize())
-                    .errorHandler(FileAccessErrorHandler.logAndClose())
-                    .probeWriter(ProbeWriter.defaultProbeWriter())
                     .build()
         when:
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
@@ -143,11 +141,38 @@ class ClosingQueueTest extends Specification
             StatsQueue.shutdown()
             long elapsed = System.nanoTime() - start
         then:
-            println(elapsed)
-            queue.isClosed()
+            queue.isTerminated()
             elapsed < 2.3e9
         where:
             closeSleep << [0, 1, 2, 3, 4]
+    }
+
+    def "should set file in CLOSE_ONLY state, when queue fails to close itself"()
+    {
+        given:
+            InternalFileAccessMock accessMock = new InternalFileAccessMock()
+            accessMock.onClose = [{ throw new TestExpectedException("") }, {}].iterator()
+
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .disableCompression(true)
+                    .mmapSize(OS.pageSize())
+                    .internalFileAccess(accessMock)
+                    .build()
+        when:
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
+            queue.add(5)
+            queue.closeBlocking()
+        then: "it should crash and set CLOSE_ONLY state, what means we can't save probes anymore, but we can send CLOSE_MESSAGE again"
+            !queue.isTerminated()
+            queue.add(5)
+            queue.add(5)
+            queue.closeBlocking()
+            ErrorHandlerTest.waitUntilQueueIsTerminatedOrThrow(queue, 5)
+        and: "it contains only first one element, added before first close"
+            Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
+            byte[] bytes = Files.readAllBytes(logFile)
+            bytes.length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM
     }
 
 

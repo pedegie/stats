@@ -7,28 +7,23 @@ import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 class FileAccess
 {
-    static int FILE_ALREADY_EXISTS = 0;
-    static int ERROR_DURING_INITIALIZATION = -2;
-    static int CLOSE_FILE_MESSAGE_ID = -1;
+    static final int FILE_ALREADY_EXISTS = 0;
+    static final int ERROR = -2;
+    static final int CLOSE_FILE_MESSAGE_ID = -1;
 
-    private static final CompletableFuture<Object> COMPLETED = CompletableFuture.completedFuture(null);
-    private static final Tuple<Integer, Semaphore> FILE_ALREADY_EXISTS_TUPLE = new Tuple<>(FILE_ALREADY_EXISTS, null);
-    private static final Tuple<Integer, Semaphore> ERROR_DURING_INIT = new Tuple<>(ERROR_DURING_INITIALIZATION, null);
+    private static final CompletableFuture<Void> COMPLETED = CompletableFuture.completedFuture(null);
     private final int timeoutMillis;
 
-    ExecutorService closeAndRegisterThreadPool = ThreadPools.singleThreadPool("closeAndRegisterThreadPool_" + UUID.randomUUID());
-    ExecutorService lowPriorityThreadPool = ThreadPools.boundedSingleThreadPool("lowPriorityThreadPool _" + UUID.randomUUID());
+    ExecutorService closeAndRegisterThreadPool = ThreadPools.singleThreadPool("close-register-pool");
+    ExecutorService recycleResizeThreadPool = ThreadPools.boundedSingleThreadPool("recycle-resize-pool");
 
     TIntObjectMap<FileAccessContext> files;
     InternalFileAccess internalFileAccess;
@@ -65,7 +60,6 @@ class FileAccess
                 writeProbeToFile(fileAccess, probe);
             }
         }
-
     }
 
     private void writeProbeToFile(FileAccessContext fileAccess, Probe probe)
@@ -73,11 +67,11 @@ class FileAccess
         try
         {
             log.trace("Writing probe: {}", probe);
-            fileAccess.writeProbe(probe);
+            internalFileAccess.writeProbe(fileAccess, probe);
             log.trace("Written probe: {}", probe);
         } catch (Exception e)
         {
-            if (handleError(fileAccess, e))
+            if (fileAccess.getQueueConfiguration().getErrorHandler().errorOnProbeWrite(e))
             {
                 closeAccessAsync(probe.getAccessId());
             }
@@ -89,50 +83,43 @@ class FileAccess
         return probe.getTimestamp() >= fileAccess.getNextCycleTimestampMillis();
     }
 
-    private CompletableFuture<Object> closeAccessAsync(int accessId)
+    public CompletableFuture<RegisterFileResponse> registerFile(QueueConfiguration conf)
+    {
+        var registerFileTransaction = new RegisterFileTransaction(conf, internalFileAccess, files);
+
+        return TimeoutedFuture
+                .supplyAsync(registerFileTransaction, timeoutMillis, closeAndRegisterThreadPool)
+                .exceptionally(throwable ->
+                {
+                    conf.getErrorHandler().errorOnCreatingFile(throwable);
+                    return RegisterFileResponse.errorDuringInit();
+                });
+    }
+
+    private CompletableFuture<Void> closeAccessAsync(int accessId)
     {
         var context = files.get(accessId);
         if (context.acquireClose())
         {
             log.trace("Acquired close for {}", accessId);
-
-            return CompletableFuture.supplyAsync(() ->
-            {
-                try
-                {
-                    if (context.isTerminated())
+            var closeFileTransaction = new CloseFileTransaction(context, timeoutMillis, accessId, internalFileAccess, files);
+            return TimeoutedFuture
+                    .supplyAsync(closeFileTransaction, timeoutMillis, closeAndRegisterThreadPool)
+                    .exceptionally(throwable ->
+                    {
+                        log.error("Error occurred during closing file {}, file becomes CLOSE_ONLY - " +
+                                "you can try to close it again or leave leaked.", accessId);
+                        try
+                        {
+                            context.getQueueConfiguration().getErrorHandler().errorOnClosingFile(throwable);
+                        } finally
+                        {
+                            context.closeOnly();
+                        }
                         return null;
-
-                    BusyWaiter.busyWait(() -> context.availablePermits() == 1, "closing file " + context.availablePermits());
-                    closeAccess(context, accessId);
-                } finally
-                {
-                    context.releaseClose();
-                }
-                return null;
-            }, closeAndRegisterThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
+                    });
         }
-
         return COMPLETED;
-    }
-
-    private void closeAccess(FileAccessContext fileAccess, int accessId)
-    {
-        try
-        {
-            log.debug("Closing {}", accessId);
-            internalFileAccess.closeAccess(fileAccess);
-            var accessContext = files.remove(accessId);
-            assert accessContext != null;
-            log.debug("Closed {}", accessId);
-        } catch (Exception e)
-        {
-            log.error("Error occurred during closing file, removing file but resources may be not released! (leak)");
-            handleError(fileAccess, e);
-        } finally
-        {
-            fileAccess.terminate();
-        }
     }
 
     private boolean isCloseFileMessage(Probe probe)
@@ -140,95 +127,44 @@ class FileAccess
         return CLOSE_FILE_MESSAGE_ID == probe.getProbe();
     }
 
-    public CompletableFuture<Tuple<Integer, Semaphore>> registerFile(QueueConfiguration conf)
+    @SneakyThrows
+    private void resize(FileAccessContext fileAccess, Probe probe)
     {
-        return CompletableFuture.supplyAsync(() ->
-        {
-            var id = conf.getPath().hashCode();
-            if (files.containsKey(id))
-            {
-                return FILE_ALREADY_EXISTS_TUPLE;
-            }
-            log.debug("Registering file {}", id);
-
-            FileAccessContext accessContext = accessContext(conf);
-            if (accessContext == null)
-            {
-                return ERROR_DURING_INIT;
-            }
-            files.put(id, accessContext);
-            log.debug("File registered {}", id);
-            return new Tuple<>(id, accessContext.getState());
-
-        }, closeAndRegisterThreadPool);
-    }
-
-    private FileAccessContext accessContext(QueueConfiguration conf)
-    {
-        FileAccessContext accessContext = null;
-        try
-        {
-            accessContext = internalFileAccess.accessContext(conf);
-            preTouch(accessContext);
-            return accessContext;
-        } catch (Exception e)
-        {
-            if (conf.getErrorHandler().handle(e) && accessContext != null)
-                accessContext.close();
-            return null;
-        }
+        fileAccess.acquireWrites();
+        TimeoutedFuture.supplyAsync(() ->
+                {
+                    log.debug("Resizing file {}", probe.getAccessId());
+                    internalFileAccess.resize(fileAccess);
+                    preTouch(fileAccess);
+                    log.debug("File resized {}", probe.getAccessId());
+                }, timeoutMillis, recycleResizeThreadPool)
+                .exceptionally(throwable ->
+                {
+                    if (fileAccess.getQueueConfiguration().getErrorHandler().errorOnResize(throwable))
+                        closeAccessAsync(probe.getAccessId());
+                    return null;
+                })
+                .thenAccept(ignore -> fileAccess.releaseWrites());
     }
 
     @SneakyThrows
     private void recycle(FileAccessContext fileAccess, Probe probe)
     {
         fileAccess.acquireWrites();
-        asyncWork(fileAccess, () ->
-        {
-            log.debug("Recycling file {}", probe.getAccessId());
-            internalFileAccess.recycle(fileAccess);
-            preTouch(fileAccess);
-            log.debug("File recycled {}", probe.getAccessId());
-        }, probe.getAccessId(), lowPriorityThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
-    }
-
-    @SneakyThrows
-    private void resize(FileAccessContext fileAccess, Probe probe)
-    {
-        fileAccess.acquireWrites();
-        asyncWork(fileAccess, () ->
-        {
-            log.debug("Resizing file {}", probe.getAccessId());
-            internalFileAccess.resize(fileAccess);
-            preTouch(fileAccess);
-            log.debug("File resized {}", probe.getAccessId());
-        }, probe.getAccessId(), lowPriorityThreadPool).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
-    }
-
-    private CompletableFuture<Object> asyncWork(FileAccessContext fileAccess, Runnable work, int accessId, Executor pool)
-    {
-        return CompletableFuture.supplyAsync(() ->
-        {
-            work.run();
-            fileAccess.releaseWrites();
-            return null;
-        }, pool).exceptionally(throwable ->
-        {
-            if (handleError(fileAccess, throwable))
-            {
-                if (fileAccess.acquireClose())
+        TimeoutedFuture.supplyAsync(() ->
                 {
-                    closeAccess(fileAccess, accessId);
-                }
-            }
-            fileAccess.releaseWrites();
-            return null;
-        });
-    }
-
-    private boolean handleError(FileAccessContext fileAccess, Throwable throwable)
-    {
-        return fileAccess.getQueueConfiguration().getErrorHandler().handle(throwable);
+                    log.debug("Recycling file {}", probe.getAccessId());
+                    internalFileAccess.recycle(fileAccess);
+                    preTouch(fileAccess);
+                    log.debug("File recycled {}", probe.getAccessId());
+                }, timeoutMillis, recycleResizeThreadPool)
+                .exceptionally(throwable ->
+                {
+                    if (fileAccess.getQueueConfiguration().getErrorHandler().errorOnRecycle(throwable))
+                        closeAccessAsync(probe.getAccessId());
+                    return null;
+                })
+                .thenAccept(ignore -> fileAccess.releaseWrites());
     }
 
     @SneakyThrows
@@ -236,19 +172,20 @@ class FileAccess
     {
         var keys = files.keys();
 
-        log.debug("Closing {} files", keys.length);
+        if (keys.length != 0)
+            log.debug("Closing {} files", keys.length);
 
         tryCloseBlocking(keys);
 
         closeAndRegisterThreadPool.shutdown();
-        lowPriorityThreadPool.shutdown();
+        recycleResizeThreadPool.shutdown();
 
         var size = files.size();
         var timeout = size == 0 ? 100 : timeoutMillis * size;
         boolean closed1 = closeAndRegisterThreadPool.awaitTermination(timeout, TimeUnit.MILLISECONDS);
         size = files.size();
         timeout = size == 0 ? 100 : timeoutMillis * size;
-        boolean closed2 = lowPriorityThreadPool.awaitTermination(timeout, TimeUnit.MILLISECONDS);
+        boolean closed2 = recycleResizeThreadPool.awaitTermination(timeout, TimeUnit.MILLISECONDS);
 
         keys = files.keys();
 

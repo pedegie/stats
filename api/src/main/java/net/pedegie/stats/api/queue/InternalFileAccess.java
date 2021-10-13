@@ -9,7 +9,19 @@ interface InternalFileAccess
 
     default FileAccessContext accessContext(QueueConfiguration configuration)
     {
-        return FileAccessStrategy.fileAccess(configuration);
+        FileAccessContext accessContext = null;
+        try
+        {
+            accessContext = FileAccessStrategy.fileAccess(configuration);
+            if (configuration.isPreTouch())
+                PreToucher.preTouch(accessContext.getBuffer());
+            return accessContext;
+        } catch (Exception e)
+        {
+            if (accessContext != null)
+                accessContext.close();
+            throw e;
+        }
     }
 
     default void recycle(FileAccessContext accessContext)
@@ -22,5 +34,10 @@ interface InternalFileAccess
     {
         accessContext.close();
         accessContext.mmapNextSlice();
+    }
+
+    default void writeProbe(FileAccessContext fileAccess, Probe probe)
+    {
+        fileAccess.writeProbe(probe);
     }
 }
