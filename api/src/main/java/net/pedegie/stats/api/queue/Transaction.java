@@ -3,15 +3,15 @@ package net.pedegie.stats.api.queue;
 @FunctionalInterface
 interface Transaction<T>
 {
-	default void setup()
-	{
+    default void setup()
+    {
 
-	}
+    }
 
-	void withinTimeout();
+    void withinTimeout();
 
-	default T commit()
-	{
-		return null;
-	}
+    default T commit()
+    {
+        return null;
+    }
 }

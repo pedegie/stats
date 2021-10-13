@@ -13,33 +13,33 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 class CloseFileTransaction implements Transaction<Void>
 {
-	FileAccessContext context;
-	long timeoutMillis;
-	int accessId;
-	InternalFileAccess internalFileAccess;
-	TIntObjectMap<FileAccessContext> files;
+    FileAccessContext context;
+    long timeoutMillis;
+    int accessId;
+    InternalFileAccess internalFileAccess;
+    TIntObjectMap<FileAccessContext> files;
 
-	@Override
-	public void setup()
-	{
-		log.debug("Closing {}", accessId);
-		if (!context.acquireWritesBlocking(timeoutMillis, TimeUnit.MILLISECONDS))
-			throw new IllegalStateException("recycle / resize prevents from closing file");
-	}
+    @Override
+    public void setup()
+    {
+        log.debug("Closing {}", accessId);
+        if (!context.acquireWritesBlocking(timeoutMillis, TimeUnit.MILLISECONDS))
+            throw new IllegalStateException("recycle / resize prevents from closing file");
+    }
 
-	@Override
-	public void withinTimeout()
-	{
-		internalFileAccess.closeAccess(context);
-	}
+    @Override
+    public void withinTimeout()
+    {
+        internalFileAccess.closeAccess(context);
+    }
 
-	@Override
-	public Void commit()
-	{
-		var accessContext = files.remove(accessId);
-		assert accessContext != null;
-		accessContext.terminate();
-		log.debug("Closed {}", accessId);
-		return null;
-	}
+    @Override
+    public Void commit()
+    {
+        var accessContext = files.remove(accessId);
+        assert accessContext != null;
+        accessContext.terminate();
+        log.debug("Closed {}", accessId);
+        return null;
+    }
 }

@@ -9,44 +9,44 @@ import java.util.concurrent.TimeoutException;
 
 class TimeoutedFuture
 {
-	private static final ScheduledExecutorService schedulerExecutor =
-			Executors.newScheduledThreadPool(10, ThreadPools.namedThreadFactory("transaction_timeout"));
+    private static final ScheduledExecutorService schedulerExecutor =
+            Executors.newScheduledThreadPool(10, ThreadPools.namedThreadFactory("transaction_timeout"));
 
-	public static <T> CompletableFuture<T> supplyAsync(
-			Transaction<T> transaction, long timeoutMillis, ExecutorService pool)
-	{
+    public static <T> CompletableFuture<T> supplyAsync(
+            Transaction<T> transaction, long timeoutMillis, ExecutorService pool)
+    {
 
-		CompletableFuture<T> cf = new CompletableFuture<>();
-		CompletableFuture<?> withinTimeout = new CompletableFuture<>();
+        CompletableFuture<T> cf = new CompletableFuture<>();
+        CompletableFuture<?> withinTimeout = new CompletableFuture<>();
 
-		pool.submit(() ->
-		{
-			try
-			{
-				transaction.setup();
+        pool.submit(() ->
+        {
+            try
+            {
+                transaction.setup();
 
-				schedulerExecutor.schedule(() ->
-				{
-					if (!withinTimeout.isDone())
-					{
-						cf.completeExceptionally(new TimeoutException());
-					}
+                schedulerExecutor.schedule(() ->
+                {
+                    if (!withinTimeout.isDone())
+                    {
+                        cf.completeExceptionally(new TimeoutException());
+                    }
 
-				}, timeoutMillis, TimeUnit.MILLISECONDS);
+                }, timeoutMillis, TimeUnit.MILLISECONDS);
 
-				transaction.withinTimeout();
-				withinTimeout.complete(null);
+                transaction.withinTimeout();
+                withinTimeout.complete(null);
 
-				if (!cf.isCompletedExceptionally())
-					cf.complete(transaction.commit());
+                if (!cf.isCompletedExceptionally())
+                    cf.complete(transaction.commit());
 
-			} catch (Throwable ex)
-			{
-				cf.completeExceptionally(ex);
-			}
-		});
+            } catch (Throwable ex)
+            {
+                cf.completeExceptionally(ex);
+            }
+        });
 
 
-		return cf;
-	}
+        return cf;
+    }
 }
