@@ -168,5 +168,5 @@ class TimeoutsExceedsTest extends Specification
     }
 
 
-    // def "should correctly handle situation when timeout occurs during closing file"
+    // def "should correctly handle situation when timeout occurs during closing file because of timeout during reycle / resize" // todo
 }
