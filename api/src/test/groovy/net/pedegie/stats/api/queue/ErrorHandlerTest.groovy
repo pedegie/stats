@@ -330,6 +330,7 @@ class ErrorHandlerTest extends Specification
         and: "put next element which cause recycle and crash"
             queue.add(5)
             BusyWaiter.busyWait({ accessMock.writesEnabled() }, "recycle termination (test)")
+            accessMock.reset()
         and: "we put one more element which causes recycle again"
             queue.add(5)
             BusyWaiter.busyWait({ accessMock.writesEnabled() }, "recycle termination (test)")

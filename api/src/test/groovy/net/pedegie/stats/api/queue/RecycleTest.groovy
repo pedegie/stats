@@ -231,5 +231,11 @@ class RecycleTest extends Specification
         {
             return recycled
         }
+
+        void reset()
+        {
+            context = null
+            recycled = false
+        }
     }
 }
