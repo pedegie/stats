@@ -45,7 +45,9 @@ class CrashRecoveryTest extends Specification
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put elements"
-            (0..(crashOnElement)).forEach { queue.add(5) }
+            (0..(crashOnElement - 1)).forEach {
+                queue.add(5)
+            }
             queue.closeBlocking()
         then: "there are probes in file but last one is missing timestamp"
             Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)

@@ -12,147 +12,162 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 class FileAccessContext
 {
-    @Getter
-    Semaphore state;
-    @Getter
-    QueueConfiguration queueConfiguration;
-    @Getter
-    @NonFinal
-    long nextCycleTimestampMillis;
-    @Getter
-    @NonFinal
-    Path fileName;
-    @NonFinal
-    ProbeWriter probeWriter;
-    int mmapSize;
-    @Getter
-    @NonFinal
-    ByteBuffer buffer;
-    @NonFinal
-    RandomAccessFile fileAccess;
-    @NonFinal
-    FileChannel channel;
-    @NonFinal
-    long fileSize;
+	private static final int CLOSE_ONLY = 5;
+	static final int ALL_PERMITS = 4;
+	static final int TERMINATED = 6;
 
-    @Builder
-    private FileAccessContext(Path fileName, Function<FileAccessContext, ProbeWriter> probeWriter, long nextCycleTimestampMillis,
-                              QueueConfiguration queueConfiguration, int mmapSize)
-    {
-        this.queueConfiguration = queueConfiguration;
-        this.fileName = fileName;
-        this.nextCycleTimestampMillis = nextCycleTimestampMillis;
-        this.mmapSize = mmapSize;
-        mmapNextSlice();
-        this.probeWriter = probeWriter.apply(this);
-        state = new Semaphore(3);
-    }
+	@Getter
+	Semaphore state;
+	@Getter
+	QueueConfiguration queueConfiguration;
+	@Getter
+	@NonFinal
+	long nextCycleTimestampMillis;
+	@Getter
+	@NonFinal
+	Path fileName;
+	@NonFinal
+	ProbeWriter probeWriter;
+	int mmapSize;
+	@Getter
+	@NonFinal
+	ByteBuffer buffer;
+	@NonFinal
+	RandomAccessFile fileAccess;
+	@NonFinal
+	FileChannel channel;
+	@NonFinal
+	long fileSize;
 
-    public void writeProbe(Probe probe)
-    {
-        probeWriter.writeProbe(buffer, probe);
-    }
+	@Builder
+	private FileAccessContext(Path fileName, Function<FileAccessContext, ProbeWriter> probeWriter, long nextCycleTimestampMillis,
+	                          QueueConfiguration queueConfiguration, int mmapSize)
+	{
+		this.queueConfiguration = queueConfiguration;
+		this.fileName = fileName;
+		this.nextCycleTimestampMillis = nextCycleTimestampMillis;
+		this.mmapSize = mmapSize;
+		mmapNextSlice();
+		this.probeWriter = probeWriter.apply(this);
+		state = new Semaphore(0);
+	}
 
-    boolean writesEnabled()
-    {
-        return state.availablePermits() == 3;
-    }
+	public void writeProbe(Probe probe)
+	{
+		probeWriter.writeProbe(buffer, probe);
+	}
 
-    int availablePermits()
-    {
-        return state.availablePermits();
-    }
+	public void enableAccess()
+	{
+		state.release(ALL_PERMITS);
+	}
 
-    void acquireWrites()
-    {
-        acquireWrites(1);
-    }
+	boolean writesEnabled()
+	{
+		return state.availablePermits() == ALL_PERMITS;
+	}
 
-    boolean acquireClose()
-    {
-        return acquireWrites(2);
-    }
+	void acquireWrites()
+	{
+		assert state.tryAcquire(1);
+	}
 
-    private boolean acquireWrites(int writes)
-    {
-        return state.tryAcquire(writes);
-    }
+	@SneakyThrows
+	boolean acquireWritesBlocking(long timeout, TimeUnit timeUnit)
+	{
+		return state.tryAcquire(timeout, timeUnit);
+	}
 
-    public void releaseWrites()
-    {
-        state.release(1);
-    }
+	public void releaseWrites()
+	{
+		state.release(1);
+	}
 
-    public void releaseClose()
-    {
-        state.release(2);
-    }
+	boolean acquireClose()
+	{
+		return state.tryAcquire(3);
+	}
 
+	public void closeOnly()
+	{
+		setState(CLOSE_ONLY);
+	}
 
-    public void mmapNextSlice()
-    {
-        mmapNextSlice(fileName);
-    }
+	public void terminate()
+	{
+		setState(TERMINATED);
+	}
 
-    @SneakyThrows
-    private void mmapNextSlice(Path path)
-    {
-        this.fileAccess = new RandomAccessFile(path.toFile(), "rw");
-        this.channel = fileAccess.getChannel();
-        this.buffer = channel.map(FileChannel.MapMode.READ_WRITE, fileSize, mmapSize);
-    }
+	private void setState(int newState)
+	{
+		state.release(newState - state.availablePermits());
+	}
 
-    public boolean needResize()
-    {
-        return buffer.limit() - buffer.position() < probeWriter.probeSize();
-    }
+	public void mmapNextSlice()
+	{
+		mmapNextSlice(fileName);
+	}
 
-    @SneakyThrows
-    void close()
-    {
-        fileSize += buffer.position();
-        channel.truncate(fileSize);
-        fileAccess.close();
-        this.channel = null;
-        this.fileAccess = null;
+	@SneakyThrows
+	private void mmapNextSlice(Path path)
+	{
+		this.fileAccess = new RandomAccessFile(path.toFile(), "rw");
+		this.channel = fileAccess.getChannel();
+		this.buffer = channel.map(FileChannel.MapMode.READ_WRITE, fileSize, mmapSize);
+	}
 
-        if (queueConfiguration.isUnmapOnClose())
-        {
-            System.gc(); // todo use chronicle unmap so we can just unmap file without GC
-        }
-    }
+	public boolean needResize()
+	{
+		return buffer.limit() - buffer.position() < probeWriter.probeSize();
+	}
 
-    void terminate()
-    {
-        state.release(4);
-    }
+	@SneakyThrows
+	void close() // idempotent
+	{
+		if (buffer != null)
+		{
+			fileSize += buffer.position();
+			buffer = null;
+		}
+		if (channel != null)
+		{
+			channel.truncate(fileSize);
+			channel = null;
+		}
+		if (fileAccess != null)
+		{
+			fileAccess.close();
+			fileAccess = null;
+		}
+		if (queueConfiguration.isUnmapOnClose())
+		{
+			System.gc(); // todo use chronicle unmap so we can just unmap file without GC
+		}
+	}
 
-    boolean isTerminated()
-    {
-        return state.availablePermits() >= 4;
-    }
+	public FileAccessContext setFileName(Path fileName)
+	{
+		this.fileName = fileName;
+		return this;
+	}
 
-    public FileAccessContext setFileName(Path fileName)
-    {
-        this.fileName = fileName;
-        return this;
-    }
+	public FileAccessContext setNextCycleTimestampMillis(long nextCycleTimestampMillis)
+	{
+		this.nextCycleTimestampMillis = nextCycleTimestampMillis;
+		return this;
+	}
 
-    public FileAccessContext setNextCycleTimestampMillis(long nextCycleTimestampMillis)
-    {
-        this.nextCycleTimestampMillis = nextCycleTimestampMillis;
-        return this;
-    }
+	public void reinitialize(Function<FileAccessContext, ProbeWriter> probeWriter)
+	{
+		this.fileSize = 0;
+		mmapNextSlice();
+		this.probeWriter = probeWriter.apply(this);
+	}
 
-    public void reinitialize(Function<FileAccessContext, ProbeWriter> probeWriter)
-    {
-        this.fileSize = 0;
-        mmapNextSlice();
-        this.probeWriter = probeWriter.apply(this);
-    }
 }

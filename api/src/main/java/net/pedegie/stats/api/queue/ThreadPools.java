@@ -16,36 +16,36 @@ import java.util.concurrent.TimeUnit;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 class ThreadPools
 {
-    static ExecutorService boundedSingleThreadPool(String poolName)
-    {
-        return new ThreadPoolExecutor(1, 1,
-                0L, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(512), //todo decorate MPMC queue from jctools in BlockingQueue
-                namedThreadFactory(poolName),
-                new RejectedExecutionHandlerImpl());
-    }
+	static ExecutorService boundedSingleThreadPool(String poolName)
+	{
+		return new ThreadPoolExecutor(1, 1,
+				0L, TimeUnit.MILLISECONDS,
+				new ArrayBlockingQueue<>(512), //todo decorate MPMC queue from jctools in BlockingQueue
+				namedThreadFactory(poolName),
+				new RejectedExecutionHandlerImpl());
+	}
 
-    static ExecutorService singleThreadPool(String poolName)
-    {
-        return new ThreadPoolExecutor(1, 1,
-                0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(),
-                namedThreadFactory(poolName));
-    }
+	static ExecutorService singleThreadPool(String poolName)
+	{
+		return new ThreadPoolExecutor(1, 1,
+				0L, TimeUnit.MILLISECONDS,
+				new LinkedBlockingQueue<>(),
+				namedThreadFactory(poolName));
+	}
 
-    private static ThreadFactory namedThreadFactory(String poolName)
-    {
-        return r -> new Thread(r, poolName);
-    }
+	public static ThreadFactory namedThreadFactory(String poolName)
+	{
+		return r -> new Thread(r, poolName);
+	}
 
-    private static class RejectedExecutionHandlerImpl implements RejectedExecutionHandler
-    {
+	private static class RejectedExecutionHandlerImpl implements RejectedExecutionHandler
+	{
 
-        @Override
-        public void rejectedExecution(Runnable r, ThreadPoolExecutor executor)
-        {
-            log.error("Rejected {} due to full Probes queue", r.toString());
-        }
+		@Override
+		public void rejectedExecution(Runnable r, ThreadPoolExecutor executor)
+		{
+			log.error("Rejected {} due to full Probes queue", r.toString());
+		}
 
-    }
+	}
 }

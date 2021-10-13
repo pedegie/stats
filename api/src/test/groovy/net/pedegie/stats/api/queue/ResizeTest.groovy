@@ -137,7 +137,7 @@ class ResizeTest extends Specification
         return new int[elements]
     }
 
-    private static class WaitingForResizeInternalAccessMock extends InternalFileAccessMock
+    static class WaitingForResizeInternalAccessMock extends InternalFileAccessMock
     {
         FileAccessContext context
 

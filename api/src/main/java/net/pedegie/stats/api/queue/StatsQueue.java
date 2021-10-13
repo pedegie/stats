@@ -14,291 +14,273 @@ import java.time.Clock;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
 @Slf4j
 public class StatsQueue<T> implements Queue<T>, Closeable
 {
-    private static final FileAccessWorker fileAccessWorker = new FileAccessWorker();
-    Clock fileCycleClock;
-    Queue<T> queue;
-    Counter count;
-    Lock closeLock;
-    WriteFilter writeFilter;
-    Semaphore closed;
-    private final int fileAccessId;
+	private static final FileAccessWorker fileAccessWorker = new FileAccessWorker();
+	Clock fileCycleClock;
+	Queue<T> queue;
+	Counter count;
+	WriteFilter writeFilter;
+	RegisterFileResponse registerResult;
 
-    @Builder
-    @SneakyThrows
-    protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration, Tailer<Long, Integer> tailer)
-    {
-        QueueConfigurationValidator.validate(queueConfiguration);
-        logConfiguration(queueConfiguration);
-        this.queue = queue;
-        this.writeFilter = queueConfiguration.getWriteFilter();
-        this.count = queueConfiguration.getSynchronizer().newCounter();
-        this.closeLock = queueConfiguration.getSynchronizer().newLock();
-        this.fileCycleClock = queueConfiguration.getFileCycleClock();
-        fileAccessWorker.start(queueConfiguration.getInternalFileAccess());
-        var registerResult = fileAccessWorker.registerFile(queueConfiguration).orTimeout(30, TimeUnit.SECONDS).join();
-        this.fileAccessId = registerResult.getA();
+	@Builder
+	@SneakyThrows
+	protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration, Tailer<Long, Integer> tailer)
+	{
+		QueueConfigurationValidator.validate(queueConfiguration);
+		logConfiguration(queueConfiguration);
+		this.queue = queue;
+		this.writeFilter = queueConfiguration.getWriteFilter();
+		this.count = queueConfiguration.getSynchronizer().newCounter();
+		this.fileCycleClock = queueConfiguration.getFileCycleClock();
+		fileAccessWorker.start(queueConfiguration.getInternalFileAccess());
 
-        if (fileAccessId == FileAccess.ERROR_DURING_INITIALIZATION)
-            throw new IllegalStateException("Error occurred during initialization");
+		this.registerResult = fileAccessWorker.registerFile(queueConfiguration).join();
+		if (registerResult.isErrorDuringInit())
+			throw new IllegalStateException("Error occurred during initialization");
 
-        if (fileAccessId == FileAccess.FILE_ALREADY_EXISTS)
-            throw new IllegalArgumentException("Queue which appends to " + queueConfiguration.getPath() + " already exists");
+		if (registerResult.isFileAlreadyExists())
+			throw new IllegalArgumentException("Queue which appends to " + queueConfiguration.getPath() + " already exists");
+	}
 
-        this.closed = registerResult.getB();
+	private void logConfiguration(QueueConfiguration conf)
+	{
+		log.info("Initializing queue with:\n" +
+						"path: {}\n" +
+						"mmapSize: {} B\n" +
+						"fileCycleDurationInMillis: {}\n" +
+						"disableCompression: {}\n" +
+						"disableSynchronization: {}\n" +
+						"preTouchEnabled: {}\n" +
+						"unmapOnClose: {}",
+				conf.getPath(), conf.getMmapSize(), conf.getFileCycleDurationInMillis(),
+				conf.isDisableCompression(), conf.isDisableSynchronization(), conf.isPreTouch(), conf.isUnmapOnClose());
+	}
 
-    }
+	@Override
+	public int size()
+	{
+		return queue.size();
+	}
 
-    private void logConfiguration(QueueConfiguration conf)
-    {
-        log.info("Initializing queue with:\n" +
-                        "path: {}\n" +
-                        "mmapSize: {} B\n" +
-                        "fileCycleDurationInMillis: {}\n" +
-                        "disableCompression: {}\n" +
-                        "disableSynchronization: {}\n" +
-                        "preTouchEnabled: {}\n" +
-                        "unmapOnClose: {}",
-                conf.getPath(), conf.getMmapSize(), conf.getFileCycleDurationInMillis(),
-                conf.isDisableCompression(), conf.isDisableSynchronization(), conf.isPreTouch(), conf.isUnmapOnClose());
-    }
+	@Override
+	public boolean isEmpty()
+	{
+		return queue.isEmpty();
+	}
 
-    @Override
-    public int size()
-    {
-        return queue.size();
-    }
+	@Override
+	public boolean contains(Object o)
+	{
+		return queue.contains(o);
+	}
 
-    @Override
-    public boolean isEmpty()
-    {
-        return queue.isEmpty();
-    }
+	@Override
+	public Iterator<T> iterator()
+	{
+		return queue.iterator();
+	}
 
-    @Override
-    public boolean contains(Object o)
-    {
-        return queue.contains(o);
-    }
+	@Override
+	public Object[] toArray()
+	{
+		return queue.toArray();
+	}
 
-    @Override
-    public Iterator<T> iterator()
-    {
-        return queue.iterator();
-    }
+	@Override
+	public <T1> T1[] toArray(T1 @NotNull [] a)
+	{
+		return queue.toArray(a);
+	}
 
-    @Override
-    public Object[] toArray()
-    {
-        return queue.toArray();
-    }
+	@Override
+	public boolean add(T t)
+	{
+		boolean added = queue.add(t);
+		if (notClosed() && added)
+		{
+			int count = this.count.incrementAndGet();
+			long time = time();
+			write(count, time);
+		}
+		return added;
+	}
 
-    @Override
-    public <T1> T1[] toArray(T1 @NotNull [] a)
-    {
-        return queue.toArray(a);
-    }
+	@Override
+	public boolean remove(Object o)
+	{
+		boolean removed = queue.remove(o);
+		if (notClosed() && removed)
+		{
+			int count = this.count.decrementAndGet();
+			long time = time();
+			write(count, time);
+		}
+		return removed;
+	}
 
-    @Override
-    public boolean add(T t)
-    {
-        boolean added = queue.add(t);
-        if (notClosed() && added)
-        {
-            int count = this.count.incrementAndGet();
-            long time = time();
-            write(count, time);
-        }
-        return added;
-    }
+	@Override
+	public boolean containsAll(@NotNull Collection<?> c)
+	{
+		return queue.containsAll(c);
+	}
 
-    @Override
-    public boolean remove(Object o)
-    {
-        boolean removed = queue.remove(o);
-        if (notClosed() && removed)
-        {
-            int count = this.count.decrementAndGet();
-            long time = time();
-            write(count, time);
-        }
-        return removed;
-    }
+	@Override
+	public boolean addAll(@NotNull Collection<? extends T> c)
+	{
+		boolean added = queue.addAll(c);
+		if (notClosed() && added)
+		{
+			int count = this.count.addAndGet(c.size());
+			long time = time();
+			write(count, time);
+		}
+		return added;
+	}
 
-    @Override
-    public boolean containsAll(@NotNull Collection<?> c)
-    {
-        return queue.containsAll(c);
-    }
+	@Override
+	public boolean removeAll(@NotNull Collection<?> c)
+	{
+		boolean removed = queue.removeAll(c);
+		if (notClosed() && removed)
+		{
+			setAndWriteCurrentSize();
+		}
+		return removed;
+	}
 
-    @Override
-    public boolean addAll(@NotNull Collection<? extends T> c)
-    {
-        boolean added = queue.addAll(c);
-        if (notClosed() && added)
-        {
-            int count = this.count.addAndGet(c.size());
-            long time = time();
-            write(count, time);
-        }
-        return added;
-    }
+	@Override
+	public boolean retainAll(@NotNull Collection<?> c)
+	{
+		boolean retained = queue.retainAll(c);
+		if (notClosed() && retained)
+		{
+			setAndWriteCurrentSize();
+		}
+		return retained;
+	}
 
-    @Override
-    public boolean removeAll(@NotNull Collection<?> c)
-    {
-        boolean removed = queue.removeAll(c);
-        if (notClosed() && removed)
-        {
-            setAndWriteCurrentSize();
-        }
-        return removed;
-    }
+	@ForceInline
+	private void setAndWriteCurrentSize()
+	{
+		var currentSize = queue.size();
+		count.set(currentSize);
+		long time = time();
+		write(currentSize, time);
+	}
 
-    @Override
-    public boolean retainAll(@NotNull Collection<?> c)
-    {
-        boolean retained = queue.retainAll(c);
-        if (notClosed() && retained)
-        {
-            setAndWriteCurrentSize();
-        }
-        return retained;
-    }
+	@Override
+	public void clear()
+	{
+		queue.clear();
+		if (notClosed())
+		{
+			count.set(0);
+			long time = time();
+			write(0, time);
+		}
+	}
 
-    @ForceInline
-    private void setAndWriteCurrentSize()
-    {
-        var currentSize = queue.size();
-        count.set(currentSize);
-        long time = time();
-        write(currentSize, time);
-    }
+	@Override
+	public boolean offer(T t)
+	{
+		boolean offered = queue.offer(t);
+		if (notClosed() && offered)
+		{
+			int count = this.count.incrementAndGet();
+			long time = time();
+			write(count, time);
+		}
+		return offered;
+	}
 
-    @Override
-    public void clear()
-    {
-        queue.clear();
-        if (notClosed())
-        {
-            count.set(0);
-            long time = time();
-            write(0, time);
-        }
-    }
+	@Override
+	public T remove()
+	{
+		T removed = queue.remove();
+		if (notClosed())
+		{
+			int count = this.count.decrementAndGet();
+			long time = time();
+			write(count, time);
+		}
+		return removed;
+	}
 
-    @Override
-    public boolean offer(T t)
-    {
-        boolean offered = queue.offer(t);
-        if (notClosed() && offered)
-        {
-            int count = this.count.incrementAndGet();
-            long time = time();
-            write(count, time);
-        }
-        return offered;
-    }
+	@Override
+	public T poll()
+	{
+		T polled = queue.poll();
+		if (notClosed() && polled != null)
+		{
+			int count = this.count.decrementAndGet();
+			long time = time();
+			write(count, time);
+		}
+		return polled;
+	}
 
-    @Override
-    public T remove()
-    {
-        T removed = queue.remove();
-        if (notClosed())
-        {
-            int count = this.count.decrementAndGet();
-            long time = time();
-            write(count, time);
-        }
-        return removed;
-    }
+	private long time()
+	{
+		return fileCycleClock.millis();
+	}
 
-    @Override
-    public T poll()
-    {
-        T polled = queue.poll();
-        if (notClosed() && polled != null)
-        {
-            int count = this.count.decrementAndGet();
-            long time = time();
-            write(count, time);
-        }
-        return polled;
-    }
+	@Override
+	public T element()
+	{
+		return queue.element();
+	}
 
-    private long time()
-    {
-        return fileCycleClock.millis();
-    }
+	@Override
+	public T peek()
+	{
+		return queue.peek();
+	}
 
-    @Override
-    public T element()
-    {
-        return queue.element();
-    }
+	private void write(int count, long time)
+	{
+		if (writeFilter.shouldWrite(count, time))
+		{
+			fileAccessWorker.writeProbe(new Probe(registerResult.getFileAccessId(), count, time));
+		}
+	}
 
-    @Override
-    public T peek()
-    {
-        return queue.peek();
-    }
+	@Override
+	public void close()
+	{
+		if (isTerminated())
+			return;
 
-    private void write(int count, long time)
-    {
-        if (writeFilter.shouldWrite(count, time))
-        {
-            fileAccessWorker.writeProbe(new Probe(fileAccessId, count, time));
-        }
-    }
+		fileAccessWorker.close(registerResult.getFileAccessId());
+	}
 
-    @Override
-    public void close()
-    {
-        if (closeLock.tryLock())
-        {
-            try
-            {
-                if (isClosed())
-                    return;
+	public void closeBlocking()
+	{
+		var notClosedYet = notClosed();
+		close();
+		BusyWaiter.busyWait(() -> notClosedYet ? !notClosed() : isTerminated(), "close blocking");
+	}
 
-                fileAccessWorker.close(fileAccessId);
-            } finally
-            {
-                closeLock.unlock();
-            }
-        }
-    }
+	private boolean notClosed()
+	{
+		return registerResult.notClosed();
+	}
 
-    public void closeBlocking()
-    {
-        close();
-        BusyWaiter.busyWait(this::isClosed, "close blocking");
-    }
+	public boolean isTerminated()
+	{
+		return registerResult.isTerminated();
+	}
 
-    private boolean notClosed()
-    {
-        return !isClosed();
-    }
+	public static void shutdown()
+	{
+		fileAccessWorker.shutdown();
+	}
 
-    public boolean isClosed()
-    {
-        return closed.availablePermits() >= 4;
-    }
-
-    public static void shutdown()
-    {
-        fileAccessWorker.shutdown();
-    }
-
-    public static void shutdownForce()
-    {
-        fileAccessWorker.shutdownForce();
-    }
+	public static void shutdownForce()
+	{
+		fileAccessWorker.shutdownForce();
+	}
 }

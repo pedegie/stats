@@ -153,7 +153,7 @@ class RecycleTest extends Specification
             spyClock.setClock(Clock.fixed(time.plus(1, ChronoUnit.MINUTES).toInstant(), ZoneId.of("UTC")))
         and: "we put one more element and wait until recycles"
             queue.add(5)
-            BusyWaiter.busyWait({ internalAccessMock.recycled() }, "recycle termination (test)")
+            BusyWaiter.busyWait({ internalAccessMock.writesEnabled() }, "recycle termination (test)")
         and: "we put one more elements, previous one was dropped during recycle"
             queue.add(5)
             queue.closeBlocking()
@@ -209,20 +209,27 @@ class RecycleTest extends Specification
         }
     }
 
-    private static class WaitingForRecycleInternalAccessMock extends InternalFileAccessMock
+    static class WaitingForRecycleInternalAccessMock extends InternalFileAccessMock
     {
         FileAccessContext context
+        volatile recycled
 
         @Override
         void recycle(FileAccessContext fileAccess)
         {
             context = fileAccess
             super.recycle(fileAccess)
+            recycled = true
+        }
+
+        boolean writesEnabled()
+        {
+            return context != null && context.writesEnabled()
         }
 
         boolean recycled()
         {
-            return context != null && context.writesEnabled()
+            return recycled
         }
     }
 }
