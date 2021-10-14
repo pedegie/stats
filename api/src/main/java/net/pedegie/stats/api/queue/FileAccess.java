@@ -186,6 +186,7 @@ class FileAccess
         size = files.size();
         timeout = size == 0 ? 100 : timeoutMillis * size;
         boolean closed2 = recycleResizeThreadPool.awaitTermination(timeout, TimeUnit.MILLISECONDS);
+        var timerPoolClosed = TimeoutedFuture.shutdownBlocking(timeoutMillis == 0 ? 100 : timeoutMillis);
 
         keys = files.keys();
 
@@ -203,12 +204,17 @@ class FileAccess
 
         if (!closed1)
         {
-            log.error("Cannot close pool {}", "closeAndRegisterThreadPool");
+            log.error("Cannot close pool {}", "close-register-pool");
         }
 
         if (!closed2)
         {
-            log.error("Cannot close pool {}", "lowPriorityThreadPool");
+            log.error("Cannot close pool {}", "recycle-resize-pool");
+        }
+
+        if (!timerPoolClosed)
+        {
+            log.error("Cannot close pool {}", "transaction-timeout");
         }
     }
 

@@ -6,7 +6,7 @@ import java.util.Objects;
 
 class QueueConfigurationValidator
 {
-    private static final String EXCEPTION_HEADER = "Wrong configuration of " + QueueConfigurationValidator.class.getName() + "\n";
+    private static final String EXCEPTION_HEADER = "Wrong configuration of " + QueueConfiguration.class.getName() + "\n";
 
     public static void validate(QueueConfiguration queueConfiguration)
     {

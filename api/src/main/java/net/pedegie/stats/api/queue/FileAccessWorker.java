@@ -33,13 +33,15 @@ class FileAccessWorker implements Runnable
     {
         if (isRunning())
         {
+            BusyWaiter.busyWait(() -> singleThreadPool != null, "initializing " + this.getClass().getName());
             return;
         }
-        log.debug("STARTING {}", this.getClass().getSimpleName());
+        log.trace("Starting {}", this.getClass().getSimpleName());
         probes.clear();
 
         fileAccess = new FileAccess(internalFileAccess);
         assert singleThreadPool == null || singleThreadPool.isTerminated();
+        TimeoutedFuture.ensureIsStarted();
         singleThreadPool = ThreadPools.singleThreadPool("file-access-worker-main");
         singleThreadPool.execute(this);
     }
