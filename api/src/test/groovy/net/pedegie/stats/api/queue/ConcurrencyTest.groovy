@@ -90,7 +90,7 @@ class ConcurrencyTest extends Specification
 
     def "should reject requests for registering the same file more than once"()
     {
-        given: "queue configuration which sleeps 3 seconds during creating file"
+        given:
             FileAccessErrorHandler errorHandler = Mock(FileAccessErrorHandler)
             InternalFileAccessMock fileAccessMock = new InternalFileAccessMock()
             fileAccessMock.onAccessContext = [{ sleep(3000) }, {}].iterator()
@@ -101,12 +101,58 @@ class ConcurrencyTest extends Specification
                     .errorHandler(errorHandler)
                     .mmapSize(OS.pageSize())
                     .build()
-        when: "try creating queue one more time, without sleeping"
+        when:
             CompletableFuture<StatsQueue<Integer>> queue1 = CompletableFuture.supplyAsync({ TestQueueUtil.createQueue(queueConfiguration) })
             CompletableFuture<StatsQueue<Integer>> queue2 = CompletableFuture.supplyAsync({ TestQueueUtil.createQueue(queueConfiguration) })
             CompletableFuture.allOf([queue1, queue2].toArray() as CompletableFuture[]).get(15, TimeUnit.SECONDS)
-        then: "its properly initialized queue"
+        then:
             Throwable exception = thrown(ExecutionException)
             exception.cause.class == IllegalArgumentException.class
+    }
+
+    def "should ignore multiple requests for closing queue, accepting just one"()
+    {
+        given:
+            FileAccessErrorHandler errorHandler = Mock(FileAccessErrorHandler)
+            InternalFileAccessMock fileAccessMock = new InternalFileAccessMock()
+            fileAccessMock.onClose = [{ sleep(3000) }, {}].iterator()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .disableCompression(true)
+                    .internalFileAccess(fileAccessMock)
+                    .errorHandler(errorHandler)
+                    .mmapSize(OS.pageSize())
+                    .build()
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
+        when:
+            queue.close()
+            queue.close()
+            queue.closeBlocking()
+        then:
+            noExceptionThrown()
+            queue.isTerminated()
+    }
+
+    def "when register request comes after closing request - it should wait, until closed and open again"()
+    {
+        given:
+            FileAccessErrorHandler errorHandler = Mock(FileAccessErrorHandler)
+            InternalFileAccessMock fileAccessMock = new InternalFileAccessMock()
+            fileAccessMock.onClose = [{ sleep(3000) }, {}].iterator()
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .disableCompression(true)
+                    .internalFileAccess(fileAccessMock)
+                    .errorHandler(errorHandler)
+                    .mmapSize(OS.pageSize())
+                    .build()
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
+        when:
+            queue.close()
+            CompletableFuture<StatsQueue<Integer>> queue1 = CompletableFuture.supplyAsync({ TestQueueUtil.createQueue(queueConfiguration) })
+            queue = queue1.join()
+        then:
+            noExceptionThrown()
+            !queue.isTerminated()
     }
 }
