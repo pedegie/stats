@@ -1,7 +1,7 @@
 package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
-import spock.lang.Ignore
+import spock.lang.Requires
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -10,8 +10,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 
-@Ignore
-// too long, run only on MRs
+@Requires({ env.LONG_RUNNING_TESTS == 'true' })
 class ClosingQueueTest extends Specification
 {
     def setup()
@@ -22,6 +21,7 @@ class ClosingQueueTest extends Specification
     def cleanup()
     {
         StatsQueue.shutdown()
+        Properties.clear()
     }
 
     def cleanupSpec()
@@ -123,7 +123,7 @@ class ClosingQueueTest extends Specification
             ByteBuffer.wrap(Files.readAllBytes(TestQueueUtil.findExactlyOneOrThrow(path2))).limit() != 2 * 12
     }
 
-    def "should close all queues irrespective of their state on timeout threshold during shutdown()"()
+    def "should close all queues irrespective of their state on timeout threshold during shutdown"()
     {
         given: "3 queues with different close duration sleep"
             Properties.add("fileaccess.timeoutthresholdmillis", 1000)
@@ -145,6 +145,7 @@ class ClosingQueueTest extends Specification
             elapsed < 2.3e9
         where:
             closeSleep << [0, 1, 2, 3, 4]
+
     }
 
     def "should set file in CLOSE_ONLY state, when queue fails to close itself"()

@@ -22,4 +22,9 @@ public class Properties
 
         return (int) property;
     }
+
+    public static void clear()
+    {
+        properties.clear();
+    }
 }

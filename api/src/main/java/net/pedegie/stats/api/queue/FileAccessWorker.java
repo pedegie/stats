@@ -33,17 +33,21 @@ class FileAccessWorker implements Runnable
     {
         if (isRunning())
         {
-            BusyWaiter.busyWait(() -> singleThreadPool != null, "initializing " + this.getClass().getName());
+            BusyWaiter.busyWait(() -> untilInitialized(singleThreadPool), "initializing " + this.getClass().getName());
             return;
         }
         log.trace("Starting {}", this.getClass().getSimpleName());
         probes.clear();
 
         fileAccess = new FileAccess(internalFileAccess);
-        assert singleThreadPool == null || singleThreadPool.isTerminated();
         TimeoutedFuture.ensureIsStarted();
         singleThreadPool = ThreadPools.singleThreadPool("file-access-worker-main");
         singleThreadPool.execute(this);
+    }
+
+    private boolean untilInitialized(ExecutorService singleThreadPool)
+    {
+        return singleThreadPool != null && !singleThreadPool.isTerminated();
     }
 
     @Override
@@ -110,7 +114,8 @@ class FileAccessWorker implements Runnable
     @SneakyThrows
     private void waitUntilTerminated()
     {
-        log.trace("Waits until terminated");
+        Properties.clear();
+        log.trace("Waiting for termination");
 
         BusyWaiter.busyWait(() -> isRunningFieldUpdater.get(this) == NOT_RUNNING, "waiting for access worker termination");
         fileAccess = null;
@@ -120,6 +125,8 @@ class FileAccessWorker implements Runnable
         {
             throw new IllegalStateException("Cannot close file-access-worker-main pool");
         }
+        probes.clear();
+
         log.trace("{} terminated.", this.getClass().getSimpleName());
     }
 

@@ -251,11 +251,11 @@ class ErrorHandlerTest extends Specification
             int[] elementsToFillWholeBuffer = new int[(queueConfiguration.mmapSize / DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM)]
             elementsToFillWholeBuffer.each { queue.add(it) }
             queue.add(1)
-            BusyWaiter.busyWait({ accessMock.resized() }, "resize termination (test)")
+            BusyWaiter.busyWait({ accessMock.writesEnabled() }, "resize termination (test)")
         and: "one more element, after queue crashed during resize on previous element - which will cause resizing again"
-            accessMock.context = null
+            accessMock.reset()
             queue.add(5)
-            BusyWaiter.busyWait({ accessMock.resized() }, "resize termination (test)")
+            BusyWaiter.busyWait({ accessMock.writesEnabled() }, "resize termination (test)")
         and: "one more, after resizing"
             queue.add(5)
             queue.closeBlocking()

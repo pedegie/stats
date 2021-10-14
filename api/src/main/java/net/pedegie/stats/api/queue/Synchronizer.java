@@ -68,14 +68,6 @@ enum Synchronizer
         }
 
         @Override
-        public int getAndAdd(int probeSize)
-        {
-            var tmp = counter;
-            counter += probeSize;
-            return tmp;
-        }
-
-        @Override
         public int get()
         {
             return counter;

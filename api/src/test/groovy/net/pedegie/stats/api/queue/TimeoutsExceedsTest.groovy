@@ -1,7 +1,7 @@
 package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
-import spock.lang.Ignore
+import spock.lang.Requires
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -14,8 +14,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 
-@Ignore
-// too long, run only on MRs
+@Requires({ env.LONG_RUNNING_TESTS == 'true' })
 class TimeoutsExceedsTest extends Specification
 {
 
@@ -76,7 +75,7 @@ class TimeoutsExceedsTest extends Specification
         given:
             FileAccessErrorHandler errorHandler = Mock(FileAccessErrorHandler)
             errorHandler.errorOnResize(_) >> false
-            InternalFileAccessMock fileAccessMock = new InternalFileAccessMock()
+            ResizeTest.WaitingForResizeInternalAccessMock fileAccessMock = new ResizeTest.WaitingForResizeInternalAccessMock()
             fileAccessMock.onResize = [{ sleep(SLEEP_MILLIS) }, {}].iterator()
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
@@ -92,6 +91,7 @@ class TimeoutsExceedsTest extends Specification
             int[] elementsToFillWholeBuffer = new int[(queueConfiguration.mmapSize / 12)]
             elementsToFillWholeBuffer.each { queue.add(it) }
             queue.add(1)
+            BusyWaiter.busyWait({ fileAccessMock.resized() }, "resize termination (test)")
             queue.closeBlocking()
         then:
             1 * errorHandler.errorOnResize(_)
@@ -173,7 +173,7 @@ class TimeoutsExceedsTest extends Specification
         given:
             FileAccessErrorHandler errorHandler = Mock(FileAccessErrorHandler)
             errorHandler.errorOnResize(_) >> false
-            InternalFileAccessMock fileAccessMock = new InternalFileAccessMock()
+            ResizeTest.WaitingForResizeInternalAccessMock fileAccessMock = new ResizeTest.WaitingForResizeInternalAccessMock()
             fileAccessMock.onResize = [{ sleep(SLEEP_MILLIS) }, {}].iterator()
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
@@ -190,6 +190,7 @@ class TimeoutsExceedsTest extends Specification
             elementsToFillWholeBuffer.each { queue.add(it) }
             queue.add(1)
             queue.closeBlocking()
+            BusyWaiter.busyWait({ fileAccessMock.resized() }, "resize termination (test)")
         then:
             1 * errorHandler.errorOnClosingFile(_)
     }

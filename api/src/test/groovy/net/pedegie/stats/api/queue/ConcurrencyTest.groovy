@@ -1,7 +1,7 @@
 package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
-import spock.lang.Ignore
+import spock.lang.Requires
 import spock.lang.Specification
 
 import java.time.Clock
@@ -13,9 +13,9 @@ import java.time.temporal.ChronoUnit
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
-@Ignore
-// too long, run only on MRs
+@Requires({ env.LONG_RUNNING_TESTS == 'true' })
 class ConcurrencyTest extends Specification
 {
     def setup()
@@ -138,7 +138,8 @@ class ConcurrencyTest extends Specification
         given:
             FileAccessErrorHandler errorHandler = Mock(FileAccessErrorHandler)
             InternalFileAccessMock fileAccessMock = new InternalFileAccessMock()
-            fileAccessMock.onClose = [{ sleep(3000) }, {}].iterator()
+            AtomicBoolean closing = new AtomicBoolean(false)
+            fileAccessMock.onClose = [{ closing.set(true); sleep(3000) }, {}].iterator()
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .disableCompression(true)
@@ -149,6 +150,7 @@ class ConcurrencyTest extends Specification
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when:
             queue.close()
+            BusyWaiter.busyWait({ closing.get() }, "when register request comes after closing request")
             CompletableFuture<StatsQueue<Integer>> queue1 = CompletableFuture.supplyAsync({ TestQueueUtil.createQueue(queueConfiguration) })
             queue = queue1.join()
         then:

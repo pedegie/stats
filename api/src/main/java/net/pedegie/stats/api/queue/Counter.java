@@ -10,7 +10,5 @@ interface Counter
 
     void set(int currentSize);
 
-    int getAndAdd(int probeSize);
-
     int get();
 }

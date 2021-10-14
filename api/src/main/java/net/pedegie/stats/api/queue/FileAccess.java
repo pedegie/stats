@@ -112,6 +112,10 @@ class FileAccess
                         try
                         {
                             context.getQueueConfiguration().getErrorHandler().errorOnClosingFile(throwable);
+                            if(log.isDebugEnabled())
+                            {
+                                log.error("", throwable);
+                            }
                         } finally
                         {
                             context.closeOnly();
@@ -181,12 +185,12 @@ class FileAccess
         recycleResizeThreadPool.shutdown();
 
         var size = files.size();
-        var timeout = size == 0 ? 100 : timeoutMillis * size;
+        var timeout = size == 0 ? 10 : timeoutMillis * size;
         boolean closed1 = closeAndRegisterThreadPool.awaitTermination(timeout, TimeUnit.MILLISECONDS);
         size = files.size();
-        timeout = size == 0 ? 100 : timeoutMillis * size;
+        timeout = size == 0 ? 10 : timeoutMillis * size;
         boolean closed2 = recycleResizeThreadPool.awaitTermination(timeout, TimeUnit.MILLISECONDS);
-        var timerPoolClosed = TimeoutedFuture.shutdownBlocking(timeoutMillis == 0 ? 100 : timeoutMillis);
+        var timerPoolClosed = TimeoutedFuture.shutdownBlocking(timeoutMillis == 0 ? 10 : timeoutMillis);
 
         keys = files.keys();
 

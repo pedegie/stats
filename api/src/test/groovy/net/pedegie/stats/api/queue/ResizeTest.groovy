@@ -44,7 +44,7 @@ class ResizeTest extends Specification
             elementsToFillWholeBuffer.each { queue.add(it) }
             queue.add(5)
         then: "we put one more element, due dropping previous one due resize"
-            BusyWaiter.busyWait({ internalAccessMock.resized() }, "resize termination (test)")
+            BusyWaiter.busyWait({ internalAccessMock.writesEnabled() }, "resize termination (test)")
             queue.add(5)
             queue.closeBlocking()
         and:
@@ -84,7 +84,7 @@ class ResizeTest extends Specification
             queue = TestQueueUtil.createQueue(queueConfiguration)
             queue.add(5)
         and: "we put one more element, due dropping previous one due resize"
-            BusyWaiter.busyWait({ internalAccessMock.resized() }, "resize termination (test)")
+            BusyWaiter.busyWait({ internalAccessMock.writesEnabled() }, "resize termination (test)")
             queue.add(5)
             queue.closeBlocking()
             probes = ByteBuffer.wrap(Files.readAllBytes(logFile))
@@ -120,7 +120,7 @@ class ResizeTest extends Specification
             }
             queue.add(1)
         and: "we put one more element, due dropping previous one due resize"
-            BusyWaiter.busyWait({ internalAccessMock.resized() }, "resize termination (test)")
+            BusyWaiter.busyWait({ internalAccessMock.writesEnabled() }, "resize termination (test)")
             queue.add(1)
             queue.closeBlocking()
         then:
@@ -140,17 +140,30 @@ class ResizeTest extends Specification
     static class WaitingForResizeInternalAccessMock extends InternalFileAccessMock
     {
         FileAccessContext context
+        volatile resized
 
         @Override
         void resize(FileAccessContext fileAccess)
         {
             context = fileAccess
             super.resize(fileAccess)
+            resized = true
+        }
+
+        boolean writesEnabled()
+        {
+            return context != null && context.writesEnabled()
         }
 
         boolean resized()
         {
-            return context != null && context.writesEnabled()
+            return resized
+        }
+
+        void reset()
+        {
+            context = null
+            resized = false
         }
     }
 }
