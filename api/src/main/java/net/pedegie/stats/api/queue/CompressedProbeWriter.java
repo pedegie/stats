@@ -26,10 +26,10 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
 
             accessContext.getBuffer().putLong(timestampWithFirstBitSetIndicatingItsCompressedFile);
             assert accessContext.getBuffer().position() == HEADER_SIZE;
-            log.debug("Initialized new compressed file {}, starting at offset: {} with timestamp: {}", accessContext.getFileName(), 0, startCycleTimestamp);
+            log.trace("Initialized new compressed file {}, starting at offset: {} with timestamp: {}", accessContext.getFileName(), 0, startCycleTimestamp);
         } else
         {
-            log.debug("Found dirty header: 0x{}", Long.toHexString(timestamp));
+            log.trace("Found dirty header: 0x{}", Long.toHexString(timestamp));
 
             if ((timestamp & Long.MIN_VALUE) == 0)
             {
@@ -42,10 +42,10 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
                 throw new IllegalStateException("Passed timestamp differs from timestamp found in file");
             }
 
-            log.debug("Recover");
+            log.trace("Recover");
             var index = CrashRecovery.recover(accessContext, this);
             accessContext.getBuffer().position(Math.max(index, HEADER_SIZE));
-            log.debug("Found compressed file {}, appending to index: {}", accessContext.getFileName(), index);
+            log.trace("Found compressed file {}, appending to index: {}", accessContext.getFileName(), index);
         }
         this.startCycleTimestamp = startCycleTimestamp;
         log.trace("{} Initialized", this.getClass().getName());

@@ -1,16 +1,24 @@
 package net.pedegie.stats.api.queue;
 
+import lombok.SneakyThrows;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 class TimeoutedFuture
 {
-    private static final ScheduledExecutorService schedulerExecutor =
-            Executors.newScheduledThreadPool(10, ThreadPools.namedThreadFactory("transaction_timeout"));
+    private static volatile ScheduledExecutorService schedulerExecutor;
+
+    public static void ensureIsStarted()
+    {
+        if (schedulerExecutor == null || schedulerExecutor.isTerminated())
+            schedulerExecutor = Executors.newScheduledThreadPool(10, ThreadPools.namedThreadFactory("transaction-timeout"));
+    }
 
     public static <T> CompletableFuture<T> supplyAsync(
             Transaction<T> transaction, long timeoutMillis, ExecutorService pool)
@@ -21,11 +29,13 @@ class TimeoutedFuture
 
         pool.submit(() ->
         {
+            ScheduledFuture<?> timer = null;
+
             try
             {
                 transaction.setup();
 
-                schedulerExecutor.schedule(() ->
+                timer = schedulerExecutor.schedule(() ->
                 {
                     if (!withinTimeout.isDone())
                     {
@@ -43,10 +53,24 @@ class TimeoutedFuture
             } catch (Throwable ex)
             {
                 cf.completeExceptionally(ex);
+            } finally
+            {
+                if (timer != null)
+                {
+                    timer.cancel(false);
+
+                }
             }
         });
 
 
         return cf;
+    }
+
+    @SneakyThrows
+    public static boolean shutdownBlocking(long timeoutmillis)
+    {
+        schedulerExecutor.shutdown();
+        return schedulerExecutor.awaitTermination(timeoutmillis, TimeUnit.MILLISECONDS);
     }
 }
