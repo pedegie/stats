@@ -16,13 +16,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
-class FileAccessContext
+public class FileAccessContext
 {
     private static final int CLOSE_ONLY = 5;
     static final int ALL_PERMITS = 4;
     static final int TERMINATED = 6;
 
-    @Getter
+    @Getter(AccessLevel.PACKAGE)
     Semaphore state;
     @Getter
     QueueConfiguration queueConfiguration;
@@ -58,12 +58,12 @@ class FileAccessContext
         state = new Semaphore(0);
     }
 
-    public void writeProbe(Probe probe)
+    void writeProbe(Probe probe)
     {
         probeWriter.writeProbe(buffer, probe);
     }
 
-    public void enableAccess()
+    void enableAccess()
     {
         state.release(ALL_PERMITS);
     }
@@ -84,7 +84,7 @@ class FileAccessContext
         return state.tryAcquire(timeout, timeUnit);
     }
 
-    public void releaseWrites()
+    void releaseWrites()
     {
         state.release(1);
     }
@@ -94,12 +94,12 @@ class FileAccessContext
         return state.tryAcquire(3);
     }
 
-    public void closeOnly()
+    void closeOnly()
     {
         setState(CLOSE_ONLY);
     }
 
-    public void terminate()
+    void terminate()
     {
         setState(TERMINATED);
     }
@@ -109,7 +109,7 @@ class FileAccessContext
         state.release(newState - state.availablePermits());
     }
 
-    public void mmapNextSlice()
+    void mmapNextSlice()
     {
         mmapNextSlice(fileName);
     }
@@ -122,7 +122,7 @@ class FileAccessContext
         this.buffer = channel.map(FileChannel.MapMode.READ_WRITE, fileSize, mmapSize);
     }
 
-    public boolean needResize()
+    boolean needResize()
     {
         return buffer.limit() - buffer.position() < probeWriter.probeSize();
     }
@@ -151,19 +151,19 @@ class FileAccessContext
         }
     }
 
-    public FileAccessContext setFileName(Path fileName)
+    FileAccessContext setFileName(Path fileName)
     {
         this.fileName = fileName;
         return this;
     }
 
-    public FileAccessContext setNextCycleTimestampMillis(long nextCycleTimestampMillis)
+    FileAccessContext setNextCycleTimestampMillis(long nextCycleTimestampMillis)
     {
         this.nextCycleTimestampMillis = nextCycleTimestampMillis;
         return this;
     }
 
-    public void reinitialize(Function<FileAccessContext, ProbeWriter> probeWriter)
+    void reinitialize(Function<FileAccessContext, ProbeWriter> probeWriter)
     {
         this.fileSize = 0;
         mmapNextSlice();
