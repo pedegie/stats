@@ -1,6 +1,7 @@
-package net.pedegie.stats.api.queue;
+package net.pedegie.stats.api.queue.probe;
 
 import lombok.extern.slf4j.Slf4j;
+import net.pedegie.stats.api.queue.FileAccessContext;
 
 import java.nio.ByteBuffer;
 
@@ -44,7 +45,7 @@ class CrashRecovery
 
     private static boolean needRecovery(ByteBuffer buffer, Recoverable recoverable)
     {
-        var index = FileUtils.findFirstFreeIndex(buffer);
+        var index = findFirstFreeIndex(buffer);
         var bufferLimitTheSameAsIndex = index == buffer.limit();
         buffer.limit(index);
 
@@ -75,5 +76,56 @@ class CrashRecovery
     private static int adjustToProbeSize(Recoverable recoverable, ByteBuffer buffer)
     {
         return buffer.limit() - (buffer.limit() % recoverable.probeSize());
+    }
+
+
+    static int findFirstFreeIndex(ByteBuffer buffer)
+    {
+        if (isEmpty(buffer))
+            return 0;
+
+        if (isFull(buffer))
+            return buffer.limit();
+
+        var index = index(buffer);
+        var offset = index % DefaultProbeWriter.PROBE_SIZE;
+        if (offset == 0)
+            return index;
+        return index - offset + DefaultProbeWriter.PROBE_SIZE;
+    }
+
+    private static int index(ByteBuffer buffer)
+    {
+        var low = 0;
+        var high = buffer.limit() - DefaultProbeWriter.PROBE_SIZE;
+        while (low < high)
+        {
+            var mid = (low + high) / 2;
+            var adjusted = mid - (mid % DefaultProbeWriter.PROBE_SIZE);
+
+            if (buffer.getInt(adjusted) != 0)
+            {
+                low = mid + 1;
+                continue;
+            }
+
+            if (buffer.get(adjusted - 1) != 0)
+            {
+                return adjusted;
+            }
+
+            high = mid;
+        }
+        return high;
+    }
+
+    private static boolean isEmpty(ByteBuffer buffer)
+    {
+        return buffer.getLong(0) == 0;
+    }
+
+    private static boolean isFull(ByteBuffer buffer)
+    {
+        return buffer.getInt(buffer.limit() - DefaultProbeWriter.PROBE_SIZE) != 0;
     }
 }

@@ -1,6 +1,7 @@
 package net.pedegie.stats.api.queue;
 
 import lombok.extern.slf4j.Slf4j;
+import net.pedegie.stats.api.queue.probe.ProbeWriter;
 
 import java.time.Instant;
 import java.time.ZonedDateTime;
@@ -69,17 +70,14 @@ class FileAccessStrategy
         {
             return fileAccessContext ->
             {
-                try
+                if (ProbeWriter.isCompressedProbeWriter(fileAccessContext.getBuffer()))
                 {
-                    return new CompressedProbeWriter(offsetDateTime, fileAccessContext);
-                } catch (CompressedProbeWriterException exc)
-                {
-                    log.warn("Compressed file overlaps with already existing file {} which wasn't recognized as compressed, creating non-compressed file access", fileAccessContext.getFileName());
-                    return new DefaultProbeWriter(fileAccessContext);
+                    return ProbeWriter.compressedProbeWriter(fileAccessContext, offsetDateTime);
                 }
+                return ProbeWriter.defaultProbeWriter(fileAccessContext);
             };
         }
-        return ProbeWriter.defaultProbeWriter();
+        return ProbeWriter::defaultProbeWriter;
     }
 
 }

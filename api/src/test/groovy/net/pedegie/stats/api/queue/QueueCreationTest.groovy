@@ -1,6 +1,7 @@
 package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
+import net.pedegie.stats.api.queue.probe.CrashRecovery
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -76,7 +77,7 @@ class QueueCreationTest extends Specification
     def "should correctly find first free index in byte buffer"()
     {
         expect:
-            FileUtils.findFirstFreeIndex(buffer) == expectedFirstFreeIndex
+            CrashRecovery.findFirstFreeIndex(buffer) == expectedFirstFreeIndex
         where:
             buffer                                               | expectedFirstFreeIndex
             wrap([0, 0, 0, 0, 0, 0, 0, 0, 0, 0] as byte[])       | 0
@@ -112,7 +113,7 @@ class QueueCreationTest extends Specification
             buffer.putShort(padding2)
             buffer.put(padding3)
         then:
-            FileUtils.findFirstFreeIndex(buffer) == 24
+            CrashRecovery.findFirstFreeIndex(buffer) == 24
 
     }
 

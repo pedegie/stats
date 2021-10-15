@@ -1,4 +1,4 @@
-package net.pedegie.stats.api.queue;
+package net.pedegie.stats.api.queue.probe;
 
 import java.nio.ByteBuffer;
 

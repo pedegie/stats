@@ -1,7 +1,9 @@
 package net.pedegie.stats.api.tailer;
 
+import net.pedegie.stats.api.queue.Probe;
+
 @FunctionalInterface
-public interface Tailer<T, E>
+public interface Tailer
 {
-    void read(T t, E e);
+    void onProbe(Probe probe);
 }

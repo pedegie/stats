@@ -4,6 +4,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.experimental.FieldDefaults;
+import net.pedegie.stats.api.queue.probe.ProbeWriter;
 
 import java.nio.file.Path;
 import java.time.Clock;

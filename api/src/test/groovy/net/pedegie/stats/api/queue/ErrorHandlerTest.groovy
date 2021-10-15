@@ -1,6 +1,7 @@
 package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
+import net.pedegie.stats.api.queue.probe.DefaultProbeWriter
 import spock.lang.Specification
 
 import java.nio.file.Files
@@ -112,7 +113,6 @@ class ErrorHandlerTest extends Specification
                     .disableCompression(true)
                     .mmapSize(OS.pageSize())
                     .errorHandler(errorHandler)
-                    .probeWriter(ProbeWriter.defaultProbeWriter())
                     .internalFileAccess(accessMock)
                     .build()
         when:
