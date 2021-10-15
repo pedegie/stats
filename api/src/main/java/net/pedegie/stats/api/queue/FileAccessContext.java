@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
+import net.pedegie.stats.api.queue.probe.ProbeWriter;
 
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;

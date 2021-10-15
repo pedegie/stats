@@ -1,6 +1,8 @@
-package net.pedegie.stats.api.queue;
+package net.pedegie.stats.api.queue.probe;
 
 import lombok.extern.slf4j.Slf4j;
+import net.pedegie.stats.api.queue.FileAccessContext;
+import net.pedegie.stats.api.queue.Probe;
 
 import java.nio.ByteBuffer;
 import java.time.ZonedDateTime;
@@ -33,7 +35,7 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
 
             if ((timestamp & Long.MIN_VALUE) == 0)
             {
-                throw new CompressedProbeWriterException("First bit not set, it's not CompressedFile");
+                throw new IllegalStateException("First bit not set, it's not CompressedFile");
             }
 
             timestamp = timestamp & Long.MAX_VALUE;
@@ -87,5 +89,11 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
         var previousTimestampIsPresent = buffer.getInt(buffer.limit() - TIMESTAMP_SIZE) != 0;
         var previousProbeIsPresent = buffer.getInt(buffer.limit() - (PROBE_AND_TIMESTAMP_BYTES_SUM)) != 0;
         return previousTimestampIsPresent && previousProbeIsPresent;
+    }
+
+    static boolean compressedBuffer(ByteBuffer buffer)
+    {
+        long firstBytes = buffer.getLong(0);
+        return firstBytes == 0 || (firstBytes & Long.MIN_VALUE) != 0;
     }
 }

@@ -1,6 +1,8 @@
 package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
+import net.pedegie.stats.api.queue.probe.CompressedProbeWriter
+import net.pedegie.stats.api.queue.probe.DefaultProbeWriter
 import spock.lang.Specification
 
 import java.nio.file.Files

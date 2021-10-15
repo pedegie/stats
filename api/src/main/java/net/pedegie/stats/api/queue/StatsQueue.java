@@ -28,7 +28,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
 
     @Builder
     @SneakyThrows
-    protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration, Tailer<Long, Integer> tailer)
+    protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration, Tailer tailer)
     {
         QueueConfigurationValidator.validate(queueConfiguration);
         logConfiguration(queueConfiguration);

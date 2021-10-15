@@ -57,10 +57,9 @@ class CrashRecoveryTest extends Specification
             queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .probeWriter(probeWriter)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
-                    .disableCompression(true)
+                    .disableCompression(disableCompression)
                     .build()
             queue = TestQueueUtil.createQueue(queueConfiguration)
         and: "we put there one element"
@@ -80,8 +79,7 @@ class CrashRecoveryTest extends Specification
                                3, 3]
             crashingProbeWriter << [new ProbeWriters.DefaultCrashingProbeWriter(1), new ProbeWriters.CompressedCrashingProbeWriter(time, 1),
                                     new ProbeWriters.DefaultCrashingProbeWriter(3), new ProbeWriters.CompressedCrashingProbeWriter(time, 3)]
-            probeWriter << [ProbeWriter.defaultProbeWriter(), ProbeWriter.compressedProbeWriter(time),
-                            ProbeWriter.defaultProbeWriter(), ProbeWriter.compressedProbeWriter(time)]
+            disableCompression << [true, false, true, false]
     }
 
     def "should recover from crash when it happens before any writes - it should truncate to beginning of buffer"()
@@ -107,10 +105,9 @@ class CrashRecoveryTest extends Specification
             queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .probeWriter(probeWriter)
                     .fileCycleDuration(Duration.of(1, ChronoUnit.HOURS))
                     .fileCycleClock(Clock.fixed(time.toInstant(), ZoneId.of("UTC")))
-                    .disableCompression(true)
+                    .disableCompression(disableCompression)
                     .build()
             queue = TestQueueUtil.createQueue(queueConfiguration)
         and: "we put there one element"
@@ -125,6 +122,6 @@ class CrashRecoveryTest extends Specification
             metadataByes << [0, 8]
             expectedBytes << [12, 16]
             crashingProbeWriter << [new ProbeWriters.DefaultCrashingProbeWriter(-1), new ProbeWriters.CompressedCrashingProbeWriter(time, -1)]
-            probeWriter << [ProbeWriter.defaultProbeWriter(), ProbeWriter.compressedProbeWriter(time)]
+            disableCompression << [true, false]
     }
 }
