@@ -13,19 +13,6 @@ import java.util.LinkedList;
 
 public class FileUtils
 {
-    @SneakyThrows
-    public static void createFile(Path path)
-    {
-        if (Files.exists(path))
-        {
-            return;
-        }
-        if (!Files.exists(path.getParent()))
-        {
-            Files.createDirectories(path.getParent());
-        }
-        Files.createFile(path);
-    }
 
     @SneakyThrows
     public static void cleanDirectory(Path path)
@@ -69,7 +56,7 @@ public class FileUtils
         return !entries.hasNext();
     }
 
-    static int roundToPageSize(int mmapSize)
+    public static int roundToPageSize(int mmapSize)
     {
         int rounded = mmapSize + OS.pageSize() - 1 & (-OS.pageSize());
         return rounded < 0 ? Integer.MAX_VALUE : rounded;

@@ -4,19 +4,17 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.experimental.FieldDefaults;
-import net.pedegie.stats.api.queue.probe.ProbeWriter;
+import net.openhft.chronicle.queue.RollCycle;
+import net.openhft.chronicle.queue.RollCycles;
+import net.pedegie.stats.api.queue.probe.ProbeAccess;
+import net.pedegie.stats.api.tailer.Tailer;
 
 import java.nio.file.Path;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.temporal.ChronoUnit;
-import java.util.function.Function;
 
 @Builder
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class QueueConfiguration
 {
-    private static final Duration DEFAULT_CYCLE_DURATION = Duration.of(1, ChronoUnit.DAYS);
     private static final int MB_500 = 1024 * 1024 * 512;
 
     @Getter
@@ -26,19 +24,11 @@ public class QueueConfiguration
     int mmapSize = MB_500;
     @Getter
     @Builder.Default
-    Duration fileCycleDuration = DEFAULT_CYCLE_DURATION;
-    @Getter
-    @Builder.Default
-    Clock fileCycleClock = Clock.systemDefaultZone();
+    RollCycle rollCycle = RollCycles.DAILY;
     @Getter
     boolean disableCompression;
     @Getter
-    Function<FileAccessContext, ProbeWriter> probeWriter;
-    @Getter
     boolean disableSynchronization;
-    @Getter
-    @Builder.Default
-    boolean unmapOnClose = true;
     @Getter
     @Builder.Default
     boolean preTouch = true;
@@ -48,19 +38,22 @@ public class QueueConfiguration
     @Builder.Default
     @Getter
     FileAccessErrorHandler errorHandler = FileAccessErrorHandler.logAndIgnore();
-    @Builder.Default
     @Getter
-    InternalFileAccess internalFileAccess = new InternalFileAccess()
+    @Builder.Default
+    ProbeAccess probeAccess = new ProbeAccess()
     {
     };
+    @Getter
+    @Builder.Default
+    InternalFileAccess internalFileAccess = InternalFileAccess.INSTANCE;
+    @Getter
+    @Builder.Default
+    int delayBetweenWritesMillis = 5000;
+    @Getter
+    Tailer tailer;
 
-    public long getFileCycleDurationInMillis()
+    public QueueConfiguration withTailer(Tailer tailer)
     {
-        return fileCycleDuration.getSeconds() * 1000;
-    }
-
-    public Synchronizer getSynchronizer()
-    {
-        return disableSynchronization ? Synchronizer.NON_SYNCHRONIZED : Synchronizer.CONCURRENT;
+        return new QueueConfiguration(path, mmapSize, rollCycle, disableCompression, disableSynchronization, preTouch, writeFilter, errorHandler, probeAccess, internalFileAccess, delayBetweenWritesMillis, tailer);
     }
 }

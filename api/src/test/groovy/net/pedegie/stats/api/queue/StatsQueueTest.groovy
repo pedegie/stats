@@ -18,7 +18,7 @@ class StatsQueueTest extends Specification
 
     def cleanup()
     {
-        StatsQueue.shutdown()
+        statsQueue.close()
     }
 
     def cleanupSpec()
@@ -44,7 +44,7 @@ class StatsQueueTest extends Specification
     {
         given:
             FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
-            StatsQueue.shutdown()
+            statsQueue.close()
             statsQueue = createQueue(new ArrayBlockingQueue<Integer>(1))
         when:
             statsQueue.add(1)
@@ -131,7 +131,7 @@ class StatsQueueTest extends Specification
     {
         given:
             FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
-            StatsQueue.shutdown()
+            statsQueue.close()
             statsQueue = createQueue(new ArrayBlockingQueue<Integer>(1))
         when:
             boolean firstElementPut = statsQueue.offer(1)

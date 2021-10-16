@@ -1,67 +1,20 @@
 package net.pedegie.stats.api.queue
 
+import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue
 
 import java.util.function.Consumer
 
-class InternalFileAccessMock implements InternalFileAccess
+class InternalFileAccessMock extends InternalFileAccess
 {
-    Iterator<Consumer<FileAccessContext>> onClose
-    Iterator<Consumer<QueueConfiguration>> onAccessContext
-    Iterator<Consumer<QueueConfiguration>> onWriteProbe
-    Iterator<Consumer<FileAccessContext>> onRecycle
-    Iterator<Consumer<FileAccessContext>> onResize
-
-    private final InternalFileAccess fileAccess
-
-    InternalFileAccessMock()
-    {
-        this.fileAccess = new InternalFileAccess() {}
-    }
+    Iterator<Consumer<SingleChronicleQueue>> onClose
 
     @Override
-    void writeProbe(FileAccessContext fileAccess, Probe probe)
-    {
-        if (onWriteProbe != null && onWriteProbe.hasNext())
-            onWriteProbe.next()(fileAccess)
-
-        fileAccess.writeProbe(probe)
-    }
-
-    @Override
-    void closeAccess(FileAccessContext accessContext)
+    void close(SingleChronicleQueue queue)
     {
         if (onClose != null && onClose.hasNext())
-            onClose.next()(accessContext)
+            onClose.next()(queue)
 
-        fileAccess.closeAccess(accessContext)
+        super.close(queue)
     }
 
-
-    @Override
-    FileAccessContext accessContext(QueueConfiguration configuration)
-    {
-        if (onAccessContext != null && onAccessContext.hasNext())
-        {
-            onAccessContext.next()(configuration)
-        }
-        return fileAccess.accessContext(configuration)
-    }
-
-    @Override
-    void recycle(FileAccessContext accessContext)
-    {
-        if (onRecycle != null && onRecycle.hasNext())
-            onRecycle.next()(accessContext)
-
-        fileAccess.recycle(accessContext)
-    }
-
-    @Override
-    void resize(FileAccessContext accessContext)
-    {
-        if (onResize != null && onResize.hasNext())
-            onResize.next()(accessContext)
-
-        fileAccess.resize(accessContext)
-    }
 }

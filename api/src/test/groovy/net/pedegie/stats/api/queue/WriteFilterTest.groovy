@@ -1,22 +1,15 @@
 package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
-import net.pedegie.stats.api.queue.probe.DefaultProbeWriter
+import net.pedegie.stats.api.tailer.ProbeTailer
 import spock.lang.Specification
 
-import java.nio.file.Files
-import java.nio.file.Path
 
 class WriteFilterTest extends Specification
 {
     def setup()
     {
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
-    }
-
-    def cleanup()
-    {
-        StatsQueue.shutdown()
     }
 
     def cleanupSpec()
@@ -32,6 +25,7 @@ class WriteFilterTest extends Specification
                     .mmapSize(OS.pageSize())
                     .disableCompression(true)
                     .writeFilter(WriteFilter.acceptWhenSizeHigherThan(3))
+                    .delayBetweenWritesMillis(0)
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we add 4 elements"
@@ -39,10 +33,11 @@ class WriteFilterTest extends Specification
             queue.add(1)
             queue.add(1)
             queue.add(1)
-            queue.closeBlocking()
-        then: "there should be only last element in file"
-            Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM
+            queue.close()
+        then: "there should be only last element in file (+1 during close flush)"
+            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(new TestTailer()))
+            tailer.probes() == 2
+            tailer.close()
     }
 
     def "default write filter should be taken into account if none configured - which accepts all"()
@@ -52,6 +47,7 @@ class WriteFilterTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .disableCompression(true)
+                    .delayBetweenWritesMillis(0)
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we add 4 elements"
@@ -59,9 +55,11 @@ class WriteFilterTest extends Specification
             queue.add(1)
             queue.add(1)
             queue.add(1)
-            queue.closeBlocking()
-        then: "there should be only last element in file"
-            Path logFile = TestQueueUtil.findExactlyOneOrThrow(TestQueueUtil.PATH)
-            Files.readAllBytes(logFile).length == DefaultProbeWriter.PROBE_AND_TIMESTAMP_BYTES_SUM * 4
+            queue.close()
+        then: "there should 4 elements (+1 during close flush)"
+            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(new TestTailer()))
+            tailer.readProbes()
+            tailer.probes() == 5
+            tailer.close()
     }
 }
