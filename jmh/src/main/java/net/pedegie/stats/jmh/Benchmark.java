@@ -6,18 +6,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
 public class Benchmark
 {
-    private static final int POISON_PILL = -1;
+    private static final int POISON_PILL = -11;
 
-    public static Supplier<Void> runBenchmarkForQueue(Queue<Integer> queue, int threads)
+    public static Supplier<Void> runBenchmarkForQueue(Queue<Integer> queue, int threads, ExecutorService producerPool, ExecutorService consumerPool)
     {
         int messagesToSendPerThread = 50000;
         Runnable producer = () ->
@@ -45,9 +48,6 @@ public class Benchmark
 
         return () ->
         {
-            var producerThreadPool = Executors.newFixedThreadPool(threads, new NamedThreadFactory("producer_pool-%d"));
-            var consumerThreadPool = Executors.newFixedThreadPool(threads, new NamedThreadFactory("consumer_pool-%d"));
-
             List<CompletableFuture<?>> futures = new ArrayList<>(threads * 2);
             IntStream.range(0, threads).forEach(index ->
             {
@@ -55,22 +55,24 @@ public class Benchmark
                 {
                     producer.run();
                     return null;
-                }, producerThreadPool));
+                }, producerPool));
                 futures.add(CompletableFuture.supplyAsync(() ->
                 {
                     consumer.run();
                     return null;
-                }, consumerThreadPool));
+                }, consumerPool));
             });
 
-            producerThreadPool.shutdown();
-            consumerThreadPool.shutdown();
             try
             {
-                producerThreadPool.awaitTermination(60, TimeUnit.SECONDS);
-                consumerThreadPool.awaitTermination(60, TimeUnit.SECONDS);
-
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{})).get(60, TimeUnit.SECONDS);
             } catch (InterruptedException e)
+            {
+                e.printStackTrace();
+            } catch (ExecutionException e)
+            {
+                e.printStackTrace();
+            } catch (TimeoutException e)
             {
                 e.printStackTrace();
             }

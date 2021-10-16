@@ -129,7 +129,7 @@ public class StatsBenchmark
 
         if (queue instanceof StatsQueue)
         {
-            ((StatsQueue) queue).close();
+            ((StatsQueue) queue).closeBlocking();
         }
 
         return benchmarkDuration;

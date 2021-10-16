@@ -13,6 +13,7 @@ import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Timeout;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.runner.Runner;
@@ -24,6 +25,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -65,7 +68,7 @@ public class QueueStatsVsConcurrentLinkedQueue
     public static class TestBenchmark
     {
         @Benchmark
-        public void StatsQueueConcurrentLinkedQueue(QueueConfiguration queueConfiguration)
+        public void AStatsQueueConcurrentLinkedQueue(QueueConfiguration queueConfiguration)
         {
             queueConfiguration.statsQueueConcurrentLinkedQueueBenchmark.get();
         }
@@ -81,29 +84,55 @@ public class QueueStatsVsConcurrentLinkedQueue
         {
             private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue", "stats_queue.log").toAbsolutePath();
 
-            @Param({"1", "2", "4", "8", "16", "32", "64", "128"})
+            @Param({"1"})
             public int threads;
 
             Supplier<Void> statsQueueConcurrentLinkedQueueBenchmark;
             Supplier<Void> concurrentLinkedQueueBenchmark;
 
+            ExecutorService producerThreadPool;
+            ExecutorService consumerThreadPool;
+
             @Setup(Level.Trial)
             public void setUp()
             {
+                System.out.println("STARTING POOL");
+                producerThreadPool = Executors.newFixedThreadPool(threads, new net.pedegie.stats.jmh.Benchmark.NamedThreadFactory("producer_pool-%d"));
+                consumerThreadPool = Executors.newFixedThreadPool(threads, new net.pedegie.stats.jmh.Benchmark.NamedThreadFactory("consumer_pool-%d"));
                 FileUtils.cleanDirectory(testQueuePath.getParent());
 
                 var queueConfiguration = net.pedegie.stats.api.queue.QueueConfiguration.builder()
                         .path(testQueuePath.getParent().resolve(Paths.get(testQueuePath.getFileName() + UUID.randomUUID().toString())))
+                        .preTouch(true)
+                        .unmapOnClose(true)
                         .mmapSize(Integer.MAX_VALUE)
                         .build();
 
-                StatsQueue<Integer> queue = StatsQueue.<Integer>builder()
+                StatsQueue<Integer> statsQueue = StatsQueue.<Integer>builder()
                         .queue(new ConcurrentLinkedQueue<>())
                         .queueConfiguration(queueConfiguration)
                         .build();
-                statsQueueConcurrentLinkedQueueBenchmark = runBenchmarkForQueue(queue, threads);
-                concurrentLinkedQueueBenchmark = runBenchmarkForQueue(new ConcurrentLinkedQueue<>(), threads);
+                statsQueueConcurrentLinkedQueueBenchmark = runBenchmarkForQueue(statsQueue, threads, producerThreadPool, consumerThreadPool);
+                concurrentLinkedQueueBenchmark = runBenchmarkForQueue(new ConcurrentLinkedQueue<>(), threads, producerThreadPool, consumerThreadPool);
             }
+
+
+            @TearDown(Level.Trial)
+            public void teardown()
+            {
+                producerThreadPool.shutdown();
+                consumerThreadPool.shutdown();
+                try
+                {
+                    producerThreadPool.awaitTermination(60, TimeUnit.SECONDS);
+                    consumerThreadPool.awaitTermination(60, TimeUnit.SECONDS);
+
+                } catch (InterruptedException e)
+                {
+                    e.printStackTrace();
+                }
+            }
+
         }
 
 
@@ -112,9 +141,21 @@ public class QueueStatsVsConcurrentLinkedQueue
 
             Options options = new OptionsBuilder()
                     .include(QueueStatsVsConcurrentLinkedQueue.class.getSimpleName())
-                    /*      .jvmArgs("--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintAssembly",
-                                  "-XX:+LogCompilation", "-XX:PrintAssemblyOptions=amd64",
-                                  "-XX:LogFile=jit_logs.txt")*/
+                          .jvmArgs("-Xlog:codecache+sweep*=trace," +
+                                  "class+unload," +
+                                  "class+load," +
+                                  "os+thread," +
+                                  "safepoint," +
+                                  "gc*," +
+                                  "gc+stringdedup=debug," +
+                                  "gc+ergo=trace," +
+                                  "gc+age=trace," +
+                                  "gc+phases=trace," +
+                                  "gc+humongous=trace," +
+                                  "jit+compilation=debug" +
+                                  ":file=/tmp/app.log" +
+                                  ":level,tags,time,uptime" +
+                                  ":filesize=104857600,filecount=5")
                     .build();
             new Runner(options).run();
         }

@@ -20,7 +20,7 @@ class ThreadPools
     {
         return new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(512), //todo decorate MPMC queue from jctools in BlockingQueue
+                new ArrayBlockingQueue<>(512), //todo decorate SPSC queue from jctools in BlockingQueue
                 namedThreadFactory(poolName),
                 new RejectedExecutionHandlerImpl());
     }
