@@ -72,7 +72,10 @@ public class StatsBenchmark
             return new Thread(r, String.format(name, threadNumber.incrementAndGet()));
         }
     }
-
+/*1 warmup iteration take 6681.611977 ms
+2 warmup iteration take 7516.835953 ms
+3 warmup iteration take 7081.929403 ms
+    Real benchmark take 7249.826785 ms*/
     @SneakyThrows
     private static double runBenchmark(ProgramArguments programArguments, int iteration)
     {
@@ -129,7 +132,7 @@ public class StatsBenchmark
 
         if (queue instanceof StatsQueue)
         {
-            ((StatsQueue) queue).close();
+            ((StatsQueue) queue).closeBlocking();
         }
 
         return benchmarkDuration;

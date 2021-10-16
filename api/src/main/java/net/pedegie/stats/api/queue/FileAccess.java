@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
@@ -109,13 +110,15 @@ class FileAccess
                     {
                         log.error("Error occurred during closing file {}, file becomes CLOSE_ONLY - " +
                                 "you can try to close it again or leave leaked.", accessId);
+
+                        if (log.isDebugEnabled())
+                        {
+                            log.error("", throwable);
+                        }
+
                         try
                         {
                             context.getQueueConfiguration().getErrorHandler().errorOnClosingFile(throwable);
-                            if(log.isDebugEnabled())
-                            {
-                                log.error("", throwable);
-                            }
                         } finally
                         {
                             context.closeOnly();
@@ -125,6 +128,7 @@ class FileAccess
         }
         return COMPLETED;
     }
+
 
     private boolean isCloseFileMessage(Probe probe)
     {
@@ -228,7 +232,7 @@ class FileAccess
         {
             closeAccessAsync(accessId).handle((unused, throwable) ->
             {
-                if (throwable != null)
+                if (throwable instanceof TimeoutException)
                 {
                     log.error("Timeout during closing file {}, trying again in a while", accessId, throwable);
                 }

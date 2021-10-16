@@ -242,7 +242,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
 
     private void write(int count, long time)
     {
-        if (writeFilter.shouldWrite(count, time))
+        if (count > -1 && writeFilter.shouldWrite(count, time))
         {
             fileAccessWorker.writeProbe(new Probe(registerResult.getFileAccessId(), count, time));
         }

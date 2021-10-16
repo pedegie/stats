@@ -59,7 +59,7 @@ class CompressedProbeWriter implements ProbeWriter, Recoverable
     }
 
     @Override
-    public void writeProbe(ByteBuffer buffer, Probe probe)
+    public void writeProbe(ByteBuffer buffer,  Probe probe)
     {
         var value = probe.getProbe() == 0 ? (probe.getProbe() | Integer.MIN_VALUE) : probe.getProbe();
         var adjustedTimestamp = (int) (probe.getTimestamp() - startCycleTimestamp);

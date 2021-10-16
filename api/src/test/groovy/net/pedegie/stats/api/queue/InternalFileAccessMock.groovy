@@ -1,5 +1,6 @@
 package net.pedegie.stats.api.queue
 
+
 import java.util.function.Consumer
 
 class InternalFileAccessMock implements InternalFileAccess

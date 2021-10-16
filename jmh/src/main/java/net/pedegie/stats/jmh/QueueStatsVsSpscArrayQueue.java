@@ -13,6 +13,7 @@ import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Timeout;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.runner.Runner;
@@ -23,6 +24,8 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -66,9 +69,14 @@ public class QueueStatsVsSpscArrayQueue
             Supplier<Void> statsQueueSpscArrayQueueBenchmark;
             Supplier<Void> spscArrayQueueBenchmark;
 
+            ExecutorService producerThreadPool;
+            ExecutorService consumerThreadPool;
+
             @Setup(Level.Trial)
             public void setUp()
             {
+                producerThreadPool = Executors.newFixedThreadPool(1, new net.pedegie.stats.jmh.Benchmark.NamedThreadFactory("producer_pool-%d"));
+                consumerThreadPool = Executors.newFixedThreadPool(1, new net.pedegie.stats.jmh.Benchmark.NamedThreadFactory("consumer_pool-%d"));
                 FileUtils.cleanDirectory(testQueuePath.getParent());
 
                 var queueConfiguration = net.pedegie.stats.api.queue.QueueConfiguration.builder()
@@ -80,9 +88,26 @@ public class QueueStatsVsSpscArrayQueue
                         .queue(new SpscArrayQueue<>(50000))
                         .queueConfiguration(queueConfiguration)
                         .build();
-                statsQueueSpscArrayQueueBenchmark = runBenchmarkForQueue(queue, 1);
-                spscArrayQueueBenchmark = runBenchmarkForQueue(new SpscArrayQueue<>(50000), 1);
+                statsQueueSpscArrayQueueBenchmark = runBenchmarkForQueue(queue, 1, producerThreadPool, consumerThreadPool);
+                spscArrayQueueBenchmark = runBenchmarkForQueue(new SpscArrayQueue<>(50000), 1, producerThreadPool, consumerThreadPool);
 
+            }
+
+
+            @TearDown(Level.Trial)
+            public void teardown()
+            {
+                producerThreadPool.shutdown();
+                consumerThreadPool.shutdown();
+                try
+                {
+                    producerThreadPool.awaitTermination(60, TimeUnit.SECONDS);
+                    consumerThreadPool.awaitTermination(60, TimeUnit.SECONDS);
+
+                } catch (InterruptedException e)
+                {
+                    e.printStackTrace();
+                }
             }
         }
 
