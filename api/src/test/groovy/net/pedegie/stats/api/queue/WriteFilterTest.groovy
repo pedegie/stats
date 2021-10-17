@@ -4,7 +4,6 @@ import net.openhft.chronicle.core.OS
 import net.pedegie.stats.api.tailer.ProbeTailer
 import spock.lang.Specification
 
-
 class WriteFilterTest extends Specification
 {
     def setup()
@@ -25,7 +24,7 @@ class WriteFilterTest extends Specification
                     .mmapSize(OS.pageSize())
                     .disableCompression(true)
                     .writeFilter(WriteFilter.acceptWhenSizeHigherThan(3))
-                    .delayBetweenWritesMillis(0)
+                    .flushThreshold(FlushThreshold.flushOnEachWrite())
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we add 4 elements"
@@ -47,7 +46,7 @@ class WriteFilterTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .disableCompression(true)
-                    .delayBetweenWritesMillis(0)
+                    .flushThreshold(FlushThreshold.flushOnEachWrite())
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we add 4 elements"

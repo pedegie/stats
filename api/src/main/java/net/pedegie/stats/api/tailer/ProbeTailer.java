@@ -5,6 +5,7 @@ import lombok.experimental.FieldDefaults;
 import net.openhft.chronicle.queue.ExcerptTailer;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
+import net.openhft.chronicle.wire.DocumentContext;
 import net.pedegie.stats.api.queue.FileUtils;
 import net.pedegie.stats.api.queue.QueueConfiguration;
 import net.pedegie.stats.api.queue.probe.Probe;
@@ -43,8 +44,22 @@ public class ProbeTailer implements Closeable
 
     public void readProbes()
     {
-        chronicleTailer.readBytes(bytes -> probeAccess.readProbeInto(bytes, probe));
-        tailer.onProbe(probe);
+        while (true)
+        {
+            try (DocumentContext dc = chronicleTailer.readingDocument())
+            {
+                if (dc.isPresent())
+                {
+                    probeAccess.readProbeInto(dc.wire().bytes(), probe);
+
+                } else
+                {
+                    break;
+                }
+            }
+            tailer.onProbe(probe);
+        }
+
     }
 
     public static ProbeTailer from(QueueConfiguration queueConfiguration)
