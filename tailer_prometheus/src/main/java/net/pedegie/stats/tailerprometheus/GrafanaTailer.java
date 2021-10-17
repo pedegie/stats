@@ -1,4 +1,4 @@
-package net.pedegie.stats.tailergrafana;
+package net.pedegie.stats.tailerprometheus;
 
 import net.pedegie.stats.api.queue.probe.Probe;
 import net.pedegie.stats.api.tailer.Tailer;

@@ -9,7 +9,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>tailer_grafana</artifactId>
+    <artifactId>tailer_prometheus</artifactId>
 
     <dependencies>
         <dependency>
