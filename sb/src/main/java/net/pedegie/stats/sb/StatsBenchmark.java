@@ -53,7 +53,6 @@ public class StatsBenchmark
         }
         summary.append("Real benchmark take ").append(benchmarkResultsInMillis[programArguments.getWarmupIterations()]).append(" ms");
         log.info("Benchmark finished, summary:\n{}", summary.toString());
-        StatsQueue.shutdownForce();
     }
 
     static class NamedThreadFactory implements ThreadFactory
@@ -129,7 +128,7 @@ public class StatsBenchmark
 
         if (queue instanceof StatsQueue)
         {
-            ((StatsQueue) queue).closeBlocking();
+            ((StatsQueue) queue).close();
         }
 
         return benchmarkDuration;
@@ -142,7 +141,6 @@ public class StatsBenchmark
 
         var queueConfiguration = QueueConfiguration.builder()
                 .path(statsQueue)
-                .unmapOnClose(false)
                 .mmapSize(Integer.MAX_VALUE)
                 .build();
 

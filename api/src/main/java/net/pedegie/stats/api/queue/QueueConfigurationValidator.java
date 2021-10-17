@@ -17,8 +17,5 @@ class QueueConfigurationValidator
         {
             throw new IllegalArgumentException(EXCEPTION_HEADER + "mmapSize: " + queueConfiguration.getMmapSize() + " cannot be less than page size: " + OS.pageSize());
         }
-
-        if (queueConfiguration.getFileCycleDurationInMillis() < 60_000)
-            throw new IllegalArgumentException(EXCEPTION_HEADER + "'fileCycleDuration' cannot be less than 1 minute");
     }
 }

@@ -4,46 +4,84 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
-import net.openhft.chronicle.core.annotation.ForceInline;
-import net.pedegie.stats.api.tailer.Tailer;
+import net.openhft.chronicle.queue.ExcerptAppender;
+import net.openhft.chronicle.queue.impl.single.Pretoucher;
+import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
+import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
+import net.pedegie.stats.api.queue.probe.ProbeAccess;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Closeable;
-import java.time.Clock;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.concurrent.atomic.LongAdder;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
 @Slf4j
 public class StatsQueue<T> implements Queue<T>, Closeable
 {
-    private static final FileAccessWorker fileAccessWorker = new FileAccessWorker();
-    Clock fileCycleClock;
+    private static final ConcurrentHashMap<String, Boolean> queues = new ConcurrentHashMap<>();
     Queue<T> queue;
-    Counter count;
     WriteFilter writeFilter;
-    RegisterFileResponse registerResult;
+    SingleChronicleQueue chronicleQueue;
+    ExcerptAppender appender;
+    FileAccessErrorHandler accessErrorHandler;
+    InternalFileAccess internalFileAccess;
+
+    private static final int FREE = 0, BUSY = 1, CLOSED = 2;
+    private static final AtomicIntegerFieldUpdater<StatsQueue> STATE_UPDATER = AtomicIntegerFieldUpdater.newUpdater(StatsQueue.class, "state");
+    @NonFinal
+    private volatile int state = FREE;
+    int delayBetweenWritesMillis;
+    @NonFinal
+    long nextWriteTimestamp;
+    ProbeAccess probeWriter;
+
+    @NonFinal
+    volatile LongAdder adder = new LongAdder();
+    Thread appenderThread;
 
     @Builder
     @SneakyThrows
-    protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration, Tailer tailer)
+    protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration)
     {
-        QueueConfigurationValidator.validate(queueConfiguration);
-        logConfiguration(queueConfiguration);
-        this.queue = queue;
-        this.writeFilter = queueConfiguration.getWriteFilter();
-        this.count = queueConfiguration.getSynchronizer().newCounter();
-        this.fileCycleClock = queueConfiguration.getFileCycleClock();
-        fileAccessWorker.start(queueConfiguration.getInternalFileAccess());
-
-        this.registerResult = fileAccessWorker.registerFile(queueConfiguration).join();
-        if (registerResult.isErrorDuringInit())
-            throw new IllegalStateException("Error occurred during initialization");
-
-        if (registerResult.isFileAlreadyExists())
+        if (queues.putIfAbsent(queueConfiguration.getPath().toString(), Boolean.TRUE) != null)
+        {
             throw new IllegalArgumentException("Queue which appends to " + queueConfiguration.getPath() + " already exists");
+        }
+        try
+        {
+            QueueConfigurationValidator.validate(queueConfiguration);
+            logConfiguration(queueConfiguration);
+            this.queue = queue;
+            this.writeFilter = queueConfiguration.getWriteFilter();
+            this.chronicleQueue = SingleChronicleQueueBuilder
+                    .binary(queueConfiguration.getPath())
+                    .rollCycle(queueConfiguration.getRollCycle())
+                    .blockSize(FileUtils.roundToPageSize(queueConfiguration.getMmapSize()))
+                    .build();
+            this.accessErrorHandler = queueConfiguration.getErrorHandler();
+
+            if (queueConfiguration.isPreTouch())
+            {
+                new Pretoucher(chronicleQueue).execute();
+            }
+            this.appender = acquireAppender();
+            this.appenderThread = Thread.currentThread();
+            this.probeWriter = queueConfiguration.getProbeAccess();
+            this.internalFileAccess = queueConfiguration.getInternalFileAccess();
+            this.delayBetweenWritesMillis = queueConfiguration.getDelayBetweenWritesMillis();
+            this.nextWriteTimestamp = System.currentTimeMillis() + delayBetweenWritesMillis;
+        } catch (Exception e)
+        {
+            queues.remove(queueConfiguration.getPath().toString());
+            throw e;
+        }
     }
 
     private void logConfiguration(QueueConfiguration conf)
@@ -51,13 +89,12 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         log.info("Initializing queue with:\n" +
                         "path: {}\n" +
                         "mmapSize: {} B\n" +
-                        "fileCycleDurationInMillis: {}\n" +
+                        "rollCycle: {}\n" +
                         "disableCompression: {}\n" +
                         "disableSynchronization: {}\n" +
-                        "preTouchEnabled: {}\n" +
-                        "unmapOnClose: {}",
-                conf.getPath(), conf.getMmapSize(), conf.getFileCycleDurationInMillis(),
-                conf.isDisableCompression(), conf.isDisableSynchronization(), conf.isPreTouch(), conf.isUnmapOnClose());
+                        "preTouchEnabled: {}",
+                conf.getPath(), conf.getMmapSize(), conf.getRollCycle(),
+                conf.isDisableCompression(), conf.isDisableSynchronization(), conf.isPreTouch());
     }
 
     @Override
@@ -100,11 +137,10 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean add(T t)
     {
         boolean added = queue.add(t);
-        if (notClosed() && added)
+        if (added)
         {
-            int count = this.count.incrementAndGet();
-            long time = time();
-            write(count, time);
+            adder.increment();
+            write();
         }
         return added;
     }
@@ -113,11 +149,10 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean remove(Object o)
     {
         boolean removed = queue.remove(o);
-        if (notClosed() && removed)
+        if (removed)
         {
-            int count = this.count.decrementAndGet();
-            long time = time();
-            write(count, time);
+            adder.decrement();
+            write();
         }
         return removed;
     }
@@ -132,11 +167,10 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public boolean addAll(@NotNull Collection<? extends T> c)
     {
         boolean added = queue.addAll(c);
-        if (notClosed() && added)
+        if (added)
         {
-            int count = this.count.addAndGet(c.size());
-            long time = time();
-            write(count, time);
+            adder.add(c.size());
+            write();
         }
         return added;
     }
@@ -144,10 +178,12 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     @Override
     public boolean removeAll(@NotNull Collection<?> c)
     {
+        var currentSize = queue.size();
         boolean removed = queue.removeAll(c);
-        if (notClosed() && removed)
+        if (removed)
         {
-            setAndWriteCurrentSize();
+            adder.add(queue.size() - currentSize);
+            write();
         }
         return removed;
     }
@@ -155,44 +191,32 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     @Override
     public boolean retainAll(@NotNull Collection<?> c)
     {
+        var currentSize = queue.size();
         boolean retained = queue.retainAll(c);
-        if (notClosed() && retained)
+        if (retained)
         {
-            setAndWriteCurrentSize();
+            adder.add(queue.size() - currentSize);
+            write();
         }
         return retained;
-    }
-
-    @ForceInline
-    private void setAndWriteCurrentSize()
-    {
-        var currentSize = queue.size();
-        count.set(currentSize);
-        long time = time();
-        write(currentSize, time);
     }
 
     @Override
     public void clear()
     {
         queue.clear();
-        if (notClosed())
-        {
-            count.set(0);
-            long time = time();
-            write(0, time);
-        }
+        adder = new LongAdder();
+        write();
     }
 
     @Override
     public boolean offer(T t)
     {
         boolean offered = queue.offer(t);
-        if (notClosed() && offered)
+        if (offered)
         {
-            int count = this.count.incrementAndGet();
-            long time = time();
-            write(count, time);
+            adder.increment();
+            write();
         }
         return offered;
     }
@@ -201,12 +225,8 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public T remove()
     {
         T removed = queue.remove();
-        if (notClosed())
-        {
-            int count = this.count.decrementAndGet();
-            long time = time();
-            write(count, time);
-        }
+        adder.decrement();
+        write();
         return removed;
     }
 
@@ -214,18 +234,17 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     public T poll()
     {
         T polled = queue.poll();
-        if (notClosed() && polled != null)
+        if (polled != null)
         {
-            int count = this.count.decrementAndGet();
-            long time = time();
-            write(count, time);
+            adder.decrement();
+            write();
         }
         return polled;
     }
 
     private long time()
     {
-        return fileCycleClock.millis();
+        return System.currentTimeMillis();
     }
 
     @Override
@@ -240,47 +259,66 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         return queue.peek();
     }
 
-    private void write(int count, long time)
+    private void write()
     {
-        if (count > -1 && writeFilter.shouldWrite(count, time))
+        try
         {
-            fileAccessWorker.writeProbe(new Probe(registerResult.getFileAccessId(), count, time));
+            var time = time();
+            if (time >= nextWriteTimestamp)
+            {
+                if (STATE_UPDATER.compareAndSet(this, FREE, BUSY))
+                {
+                    try
+                    {
+                        write(time, appender);
+                    } finally
+                    {
+                        state = FREE;
+                    }
+                }
+            }
+        } catch (Exception e)
+        {
+            if (accessErrorHandler.onError(e))
+            {
+                close();
+            }
+        }
+    }
+
+    private void write(long time, ExcerptAppender appender)
+    {
+        var count = adder.intValue();
+        if (count > -1 && writeFilter.shouldWrite(count))
+        {
+            appender.writeBytes(bytes -> probeWriter.writeProbe(bytes, count, time));
+            nextWriteTimestamp = time + delayBetweenWritesMillis;
         }
     }
 
     @Override
     public void close()
     {
-        if (isTerminated())
-            return;
-
-        fileAccessWorker.close(registerResult.getFileAccessId());
+        try
+        {
+            if (STATE_UPDATER.getAndSet(this, CLOSED) != CLOSED)
+            {
+                String path = chronicleQueue.file().getAbsolutePath();
+                queues.remove(path);
+                write(time(), acquireAppender());
+                internalFileAccess.close(chronicleQueue);
+            }
+        } catch (Exception e)
+        {
+            accessErrorHandler.onError(e);
+        }
     }
 
-    public void closeBlocking()
+    private ExcerptAppender acquireAppender()
     {
-        var notClosedYet = notClosed();
-        close();
-        BusyWaiter.busyWait(() -> notClosedYet ? !notClosed() : isTerminated(), "close blocking");
-    }
+        if (appender == null || Thread.currentThread() != appenderThread)
+            return chronicleQueue.acquireAppender().disableThreadSafetyCheck(true);
 
-    private boolean notClosed()
-    {
-        return registerResult.notClosed();
-    }
-
-    public boolean isTerminated()
-    {
-        return registerResult.isTerminated();
-    }
-
-    public static void shutdown()
-    {
-        fileAccessWorker.shutdown();
-    }
-
-    public static void shutdownForce()
-    {
-        fileAccessWorker.shutdownForce();
+        return appender;
     }
 }

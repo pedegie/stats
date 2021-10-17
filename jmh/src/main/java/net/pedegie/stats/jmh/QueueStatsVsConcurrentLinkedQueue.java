@@ -34,25 +34,22 @@ import static net.pedegie.stats.jmh.Benchmark.runBenchmarkForQueue;
 
 /*
 Benchmark                                                                        (threads)  Mode  Cnt     Score      Error  Units
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    1  avgt    4     5.895 ±    0.494  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    2  avgt    4    21.882 ±   14.012  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    4  avgt    4    34.899 ±    1.647  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    8  avgt    4   159.042 ±    5.050  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                   16  avgt    4   388.343 ±  106.886  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                   32  avgt    4   790.953 ±  216.111  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                   64  avgt    4  1676.783 ±  335.230  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                  128  avgt    4  2287.866 ±   85.530  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue          1  avgt    4    14.575 ±    5.231  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue          2  avgt    4    36.946 ±    1.668  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue          4  avgt    4    73.907 ±    4.084  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue          8  avgt    4   190.110 ±   69.062  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue         16  avgt    4   414.898 ±  181.509  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue         32  avgt    4   870.168 ±  371.649  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue         64  avgt    4  1808.156 ±  563.902  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue        128  avgt    4  3853.431 ± 1105.405  ms/op
-
-Process finished with exit code 0
-
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue          1  avgt    4     6.858 ±   0.255  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue          2  avgt    4    27.704 ±   0.181  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue          4  avgt    4    79.120 ±   0.176  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue          8  avgt    4   190.710 ±   5.323  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue         16  avgt    4   398.185 ±   8.719  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue         32  avgt    4   806.083 ±  12.033  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue         64  avgt    4  1620.848 ±  21.684  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue        128  avgt    4  3315.942 ± 143.496  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                     1  avgt    4     4.787 ±   0.122  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                     2  avgt    4    22.304 ±   1.239  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                     4  avgt    4    60.345 ±   8.981  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                     8  avgt    4   168.159 ±   9.305  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    16  avgt    4   370.877 ±   9.365  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    32  avgt    4   778.762 ±  68.289  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    64  avgt    4  1578.408 ±  69.265  ms/op
+QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                   128  avgt    4  2059.477 ± 104.889  ms/op
 */
 
 
@@ -84,7 +81,7 @@ public class QueueStatsVsConcurrentLinkedQueue
         {
             private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue", "stats_queue.log").toAbsolutePath();
 
-            @Param({"1"})
+            @Param({"1", "2", "4", "8", "16", "32", "64", "128"})
             public int threads;
 
             Supplier<Void> statsQueueConcurrentLinkedQueueBenchmark;
@@ -92,11 +89,11 @@ public class QueueStatsVsConcurrentLinkedQueue
 
             ExecutorService producerThreadPool;
             ExecutorService consumerThreadPool;
+            StatsQueue<Integer> statsQueue;
 
             @Setup(Level.Trial)
             public void setUp()
             {
-                System.out.println("STARTING POOL");
                 producerThreadPool = Executors.newFixedThreadPool(threads, new net.pedegie.stats.jmh.Benchmark.NamedThreadFactory("producer_pool-%d"));
                 consumerThreadPool = Executors.newFixedThreadPool(threads, new net.pedegie.stats.jmh.Benchmark.NamedThreadFactory("consumer_pool-%d"));
                 FileUtils.cleanDirectory(testQueuePath.getParent());
@@ -104,11 +101,10 @@ public class QueueStatsVsConcurrentLinkedQueue
                 var queueConfiguration = net.pedegie.stats.api.queue.QueueConfiguration.builder()
                         .path(testQueuePath.getParent().resolve(Paths.get(testQueuePath.getFileName() + UUID.randomUUID().toString())))
                         .preTouch(true)
-                        .unmapOnClose(true)
                         .mmapSize(Integer.MAX_VALUE)
                         .build();
 
-                StatsQueue<Integer> statsQueue = StatsQueue.<Integer>builder()
+                statsQueue = StatsQueue.<Integer>builder()
                         .queue(new ConcurrentLinkedQueue<>())
                         .queueConfiguration(queueConfiguration)
                         .build();
@@ -118,7 +114,7 @@ public class QueueStatsVsConcurrentLinkedQueue
 
 
             @TearDown(Level.Trial)
-            public void teardown()
+            public void teardownTrial()
             {
                 producerThreadPool.shutdown();
                 consumerThreadPool.shutdown();
@@ -131,8 +127,8 @@ public class QueueStatsVsConcurrentLinkedQueue
                 {
                     e.printStackTrace();
                 }
+                statsQueue.close();
             }
-
         }
 
 
@@ -141,21 +137,21 @@ public class QueueStatsVsConcurrentLinkedQueue
 
             Options options = new OptionsBuilder()
                     .include(QueueStatsVsConcurrentLinkedQueue.class.getSimpleName())
-                          .jvmArgs("-Xlog:codecache+sweep*=trace," +
-                                  "class+unload," +
-                                  "class+load," +
-                                  "os+thread," +
-                                  "safepoint," +
-                                  "gc*," +
-                                  "gc+stringdedup=debug," +
-                                  "gc+ergo=trace," +
-                                  "gc+age=trace," +
-                                  "gc+phases=trace," +
-                                  "gc+humongous=trace," +
-                                  "jit+compilation=debug" +
-                                  ":file=/tmp/app.log" +
-                                  ":level,tags,time,uptime" +
-                                  ":filesize=104857600,filecount=5")
+                    /*              .jvmArgs("-Xlog:codecache+sweep*=trace," +
+                                          "class+unload," +
+                                          "class+load," +
+                                          "os+thread," +
+                                          "safepoint," +
+                                          "gc*," +
+                                          "gc+stringdedup=debug," +
+                                          "gc+ergo=trace," +
+                                          "gc+age=trace," +
+                                          "gc+phases=trace," +
+                                          "gc+humongous=trace," +
+                                          "jit+compilation=debug" +
+                                          ":file=/tmp/app.log" +
+                                          ":level,tags,time,uptime" +
+                                          ":filesize=104857600,filecount=5")*/
                     .build();
             new Runner(options).run();
         }
