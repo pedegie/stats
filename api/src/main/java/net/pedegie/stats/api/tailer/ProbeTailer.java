@@ -8,8 +8,8 @@ import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.chronicle.wire.DocumentContext;
 import net.pedegie.stats.api.queue.FileUtils;
 import net.pedegie.stats.api.queue.QueueConfiguration;
-import net.pedegie.stats.api.queue.probe.Probe;
 import net.pedegie.stats.api.queue.probe.ProbeAccess;
+import net.pedegie.stats.api.queue.probe.ProbeHolder;
 
 import java.io.Closeable;
 
@@ -20,7 +20,7 @@ public class ProbeTailer implements Closeable
     SingleChronicleQueue chronicleQueue;
     ExcerptTailer chronicleTailer;
     ProbeAccess probeAccess;
-    private final Probe probe = new Probe();
+    private final ProbeHolder probe = new ProbeHolder();
 
     public ProbeTailer(QueueConfiguration queueConfiguration)
     {
