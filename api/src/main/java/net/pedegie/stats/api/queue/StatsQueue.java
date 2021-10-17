@@ -33,7 +33,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     FileAccessErrorHandler accessErrorHandler;
     InternalFileAccess internalFileAccess;
 
-    private static final int FREE = 0, BUSY = 1, CLOSED = 2;
+    private static final int FREE = 0, BUSY = 1, CLOSING = 2, CLOSED = 3;
     private static final AtomicIntegerFieldUpdater<StatsQueue> STATE_UPDATER = AtomicIntegerFieldUpdater.newUpdater(StatsQueue.class, "state");
     @NonFinal
     private volatile int state = FREE;
@@ -45,6 +45,9 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     @NonFinal
     volatile LongAdder adder = new LongAdder();
     Thread appenderThread;
+
+    @NonFinal
+    boolean firstClose = true;
 
     @Builder
     @SneakyThrows
@@ -310,16 +313,26 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     {
         try
         {
-            if (STATE_UPDATER.getAndSet(this, CLOSED) != CLOSED)
+            if (STATE_UPDATER.getAndSet(this, CLOSING) != CLOSED)
             {
-                queues.remove(chronicleQueue.file().getAbsolutePath());
-                write(time(), acquireAppender());
+                if (firstClose)
+                {
+                    flush();
+                    firstClose = false;
+                }
                 internalFileAccess.close(chronicleQueue);
+                queues.remove(chronicleQueue.file().getAbsolutePath());
+                STATE_UPDATER.set(this, CLOSED);
             }
         } catch (Exception e)
         {
             accessErrorHandler.onError(e);
         }
+    }
+
+    private void flush()
+    {
+        write(time(), acquireAppender());
     }
 
     private ExcerptAppender acquireAppender()

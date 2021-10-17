@@ -11,7 +11,7 @@ class ClosingQueueTest extends Specification
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
-    def cleanup()
+    def cleanupSpec()
     {
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
@@ -76,6 +76,36 @@ class ClosingQueueTest extends Specification
             tailer.probes() == 2
             tailer.readProbes()
             testTailer.probes.get(1).count == 4
+            tailer.close()
+    }
+
+    def "should set queue into CLOSE_ONLY state, if error happens during close - which means it accepts only close requests, ignoring all the rest"()
+    {
+
+        given:
+            InternalFileAccessMock accessMock = new InternalFileAccessMock()
+            accessMock.onClose = [{ throw new TestExpectedException() }, {}].iterator()
+            FileAccessErrorHandler errorHandler = Mock(FileAccessErrorHandler)
+
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .disableCompression(true)
+                    .mmapSize(OS.pageSize())
+                    .errorHandler(errorHandler)
+                    .internalFileAccess(accessMock)
+                    .build()
+        when:
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
+            queue.close()
+        then:
+            1 * errorHandler.onError(_)
+        when:
+            queue.add(5)
+            queue.add(5)
+            queue.close()
+        then:
+            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(new TestTailer()))
+            tailer.probes() == 1
             tailer.close()
     }
 }
