@@ -19,7 +19,7 @@
         <module>api</module>
         <module>jmh</module>
         <module>sb</module>
-        <module>tailer_grafana</module>
+        <module>tailer_prometheus</module>
     </modules>
 
     <dependencyManagement>
