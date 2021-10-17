@@ -70,18 +70,18 @@ public class QueueStatsVsConcurrentLinkedQueue
             queueConfiguration.statsQueueConcurrentLinkedQueueBenchmark.get();
         }
 
-/*        @Benchmark
+        @Benchmark
         public void ConcurrentLinkedQueue(QueueConfiguration queueConfiguration)
         {
             queueConfiguration.concurrentLinkedQueueBenchmark.get();
-        }*/
+        }
 
         @State(Scope.Benchmark)
         public static class QueueConfiguration
         {
             private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue", "stats_queue.log").toAbsolutePath();
 
-            @Param({"8"/*, "2", "4", "8", "16", "32", "64", "128"*/})
+            @Param({"1", "2", "4", "8", "16", "32", "64", "128"})
             public int threads;
 
             Supplier<Void> statsQueueConcurrentLinkedQueueBenchmark;
