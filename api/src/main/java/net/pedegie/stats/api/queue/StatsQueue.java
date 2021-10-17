@@ -37,7 +37,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     private static final AtomicIntegerFieldUpdater<StatsQueue> STATE_UPDATER = AtomicIntegerFieldUpdater.newUpdater(StatsQueue.class, "state");
     @NonFinal
     private volatile int state = FREE;
-    int delayBetweenWritesMillis;
+    FlushThreshold flushThreshold;
     @NonFinal
     long nextWriteTimestamp;
     ProbeAccess probeWriter;
@@ -50,6 +50,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     @SneakyThrows
     protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration)
     {
+        System.setProperty("disable.thread.safety", "true");
         if (queues.putIfAbsent(queueConfiguration.getPath().toString(), Boolean.TRUE) != null)
         {
             throw new IllegalArgumentException("Queue which appends to " + queueConfiguration.getPath() + " already exists");
@@ -75,8 +76,8 @@ public class StatsQueue<T> implements Queue<T>, Closeable
             this.appenderThread = Thread.currentThread();
             this.probeWriter = queueConfiguration.getProbeAccess();
             this.internalFileAccess = queueConfiguration.getInternalFileAccess();
-            this.delayBetweenWritesMillis = queueConfiguration.getDelayBetweenWritesMillis();
-            this.nextWriteTimestamp = System.currentTimeMillis() + delayBetweenWritesMillis;
+            this.flushThreshold = queueConfiguration.getFlushThreshold();
+            this.nextWriteTimestamp = time();
         } catch (Exception e)
         {
             queues.remove(queueConfiguration.getPath().toString());
@@ -140,7 +141,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         if (added)
         {
             adder.increment();
-            write();
+            write(1);
         }
         return added;
     }
@@ -152,7 +153,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         if (removed)
         {
             adder.decrement();
-            write();
+            write(1);
         }
         return removed;
     }
@@ -169,8 +170,9 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         boolean added = queue.addAll(c);
         if (added)
         {
-            adder.add(c.size());
-            write();
+            int size = c.size();
+            adder.add(size);
+            write(size);
         }
         return added;
     }
@@ -180,10 +182,13 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     {
         var currentSize = queue.size();
         boolean removed = queue.removeAll(c);
-        if (removed)
+        if (removed && currentSize > 0)
         {
-            adder.add(queue.size() - currentSize);
-            write();
+            int negativeDiff = queue.size() - currentSize;
+            if (negativeDiff != 0)
+                adder.add(negativeDiff);
+
+            write(-negativeDiff);
         }
         return removed;
     }
@@ -193,10 +198,13 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     {
         var currentSize = queue.size();
         boolean retained = queue.retainAll(c);
-        if (retained)
+        if (retained && currentSize > 0)
         {
-            adder.add(queue.size() - currentSize);
-            write();
+            int negativeDiff = queue.size() - currentSize;
+            if (negativeDiff != 0)
+                adder.add(negativeDiff);
+
+            write(-negativeDiff);
         }
         return retained;
     }
@@ -204,9 +212,10 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     @Override
     public void clear()
     {
+        var difference = queue.size();
         queue.clear();
         adder = new LongAdder();
-        write();
+        write(difference);
     }
 
     @Override
@@ -216,7 +225,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         if (offered)
         {
             adder.increment();
-            write();
+            write(1);
         }
         return offered;
     }
@@ -226,7 +235,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     {
         T removed = queue.remove();
         adder.decrement();
-        write();
+        write(1);
         return removed;
     }
 
@@ -237,7 +246,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         if (polled != null)
         {
             adder.decrement();
-            write();
+            write(1);
         }
         return polled;
     }
@@ -259,18 +268,19 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         return queue.peek();
     }
 
-    private void write()
+    private void write(int difference)
     {
         try
         {
             var time = time();
-            if (time >= nextWriteTimestamp)
+            if (time >= nextWriteTimestamp || difference >= flushThreshold.getMinSizeDifference())
             {
                 if (STATE_UPDATER.compareAndSet(this, FREE, BUSY))
                 {
                     try
                     {
                         write(time, appender);
+                        nextWriteTimestamp = time + flushThreshold.getDelayBetweenWritesMillis();
                     } finally
                     {
                         state = FREE;
@@ -289,10 +299,9 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     private void write(long time, ExcerptAppender appender)
     {
         var count = adder.intValue();
-        if (count > -1 && writeFilter.shouldWrite(count))
+        if (count > -1 && writeFilter.shouldWrite(count, time))
         {
             appender.writeBytes(bytes -> probeWriter.writeProbe(bytes, count, time));
-            nextWriteTimestamp = time + delayBetweenWritesMillis;
         }
     }
 
@@ -303,8 +312,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         {
             if (STATE_UPDATER.getAndSet(this, CLOSED) != CLOSED)
             {
-                String path = chronicleQueue.file().getAbsolutePath();
-                queues.remove(path);
+                queues.remove(chronicleQueue.file().getAbsolutePath());
                 write(time(), acquireAppender());
                 internalFileAccess.close(chronicleQueue);
             }
@@ -317,7 +325,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     private ExcerptAppender acquireAppender()
     {
         if (appender == null || Thread.currentThread() != appenderThread)
-            return chronicleQueue.acquireAppender().disableThreadSafetyCheck(true);
+            return chronicleQueue.acquireAppender();
 
         return appender;
     }

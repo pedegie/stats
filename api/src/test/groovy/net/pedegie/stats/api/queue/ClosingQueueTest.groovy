@@ -38,7 +38,7 @@ class ClosingQueueTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .delayBetweenWritesMillis(0)
+                    .flushThreshold(FlushThreshold.flushOnEachWrite())
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when:
@@ -60,19 +60,22 @@ class ClosingQueueTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .delayBetweenWritesMillis(5000)
+                    .flushThreshold(FlushThreshold.of(5000, 2))
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
-        when:
+        when: "we put 4 elements, one by one"
             queue.add(5)
             queue.add(5)
+            queue.add(5)
+            queue.add(5)
+        and:
             queue.close()
-        then:
+        then: "there are 2 elements, first added on first add because of millis condition met and second element added during close"
             TestTailer testTailer = new TestTailer()
             ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(testTailer))
-            tailer.probes() == 1
+            tailer.probes() == 2
             tailer.readProbes()
-            testTailer.probes.first().count == 2
+            testTailer.probes.get(1).count == 4
             tailer.close()
     }
 }
