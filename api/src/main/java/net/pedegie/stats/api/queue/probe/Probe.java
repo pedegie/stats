@@ -1,12 +1,10 @@
 package net.pedegie.stats.api.queue.probe;
 
-import lombok.Getter;
-import lombok.Setter;
-
-@Getter
-@Setter
-public class Probe
+public interface Probe
 {
-    int count;
-    long timestamp;
+    int getCount();
+
+    long getTimestamp();
+
+    Probe copyForStore();
 }

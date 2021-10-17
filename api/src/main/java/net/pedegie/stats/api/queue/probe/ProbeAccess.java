@@ -11,7 +11,7 @@ public interface ProbeAccess
         mmapedFile.writeLong(timestamp);
     }
 
-    default void readProbeInto(BytesIn<?> mmapedFile, Probe probe)
+    default void readProbeInto(BytesIn<?> mmapedFile, ProbeHolder probe)
     {
         probe.setCount(mmapedFile.readInt());
         probe.setTimestamp(mmapedFile.readLong());
