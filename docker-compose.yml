@@ -1,13 +1,9 @@
-networks:
-  monitor-net:
-    driver: bridge
-
+version: "3"
 volumes:
   prometheus_data: {}
   grafana_data: {}
 
 services:
-
   prometheus:
     user: $USER
     image: prom/prometheus:v2.30.3
@@ -23,11 +19,4 @@ services:
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
     restart: unless-stopped
-    expose:
-      - 9090
-    ports:
-      - 9090:9090
-    networks:
-      - monitor-net
-    labels:
-      org.label-schema.group: "monitoring"
+    network_mode: "host"
