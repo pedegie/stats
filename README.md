@@ -8,4 +8,4 @@ Tracing Java Collections tool
 
 
 USER=username docker-compose up
-Prometheus (metrics database) http://<host-ip>:9090
+Prometheus (metrics database) http://localhost:9090
