@@ -8,7 +8,6 @@ import lombok.experimental.FieldDefaults;
 import net.openhft.chronicle.queue.RollCycle;
 import net.openhft.chronicle.queue.RollCycles;
 import net.pedegie.stats.api.queue.probe.ProbeAccess;
-import net.pedegie.stats.api.tailer.Tailer;
 
 import java.nio.file.Path;
 
@@ -34,12 +33,9 @@ public class QueueConfiguration
     @Builder.Default
     FileAccessErrorHandler errorHandler = FileAccessErrorHandler.logAndIgnore();
     @Builder.Default
-    ProbeAccess probeAccess = new ProbeAccess()
-    {
-    };
+    ProbeAccess probeAccess = ProbeAccess.defaultAccess();
     @Builder.Default
     InternalFileAccess internalFileAccess = InternalFileAccess.INSTANCE;
     @Builder.Default
     FlushThreshold flushThreshold = FlushThreshold.defaultThreshold();
-    Tailer tailer;
 }

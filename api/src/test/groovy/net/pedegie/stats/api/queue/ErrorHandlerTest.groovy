@@ -1,9 +1,12 @@
 package net.pedegie.stats.api.queue
 
+import net.openhft.chronicle.bytes.BytesIn
 import net.openhft.chronicle.bytes.BytesOut
 import net.openhft.chronicle.core.OS
 import net.pedegie.stats.api.queue.probe.ProbeAccess
+import net.pedegie.stats.api.queue.probe.ProbeHolder
 import net.pedegie.stats.api.tailer.ProbeTailer
+import net.pedegie.stats.api.tailer.TailerFactory
 import spock.lang.Specification
 
 
@@ -36,6 +39,12 @@ class ErrorHandlerTest extends Specification
                         {
                             if (++written == 1)
                                 throw new TestExpectedException()
+                        }
+
+                        @Override
+                        void readProbeInto(BytesIn<?> mmapedFile, ProbeHolder probe)
+                        {
+
                         }
                     })
                     .mmapSize(OS.pageSize())
@@ -92,6 +101,12 @@ class ErrorHandlerTest extends Specification
                             if (++written == 1)
                                 throw new TestExpectedException()
                         }
+
+                        @Override
+                        void readProbeInto(BytesIn<?> mmapedFile, ProbeHolder probe)
+                        {
+
+                        }
                     })
                     .errorHandler(errorHandler)
                     .build()
@@ -102,7 +117,7 @@ class ErrorHandlerTest extends Specification
             queue.add(5)
             queue.close()
         then: "it should contain only first probe"
-            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(new TestTailer()))
+            ProbeTailer tailer = TailerFactory.tailerFor(TestQueueUtil.PATH)
             tailer.probes() == 1
             tailer.close()
     }
@@ -130,6 +145,12 @@ class ErrorHandlerTest extends Specification
                             mmapedFile.writeInt(count)
                             mmapedFile.writeLong(timestamp)
                         }
+
+                        @Override
+                        void readProbeInto(BytesIn<?> mmapedFile, ProbeHolder probe)
+                        {
+
+                        }
                     })
                     .errorHandler(errorHandler)
                     .build()
@@ -140,7 +161,7 @@ class ErrorHandlerTest extends Specification
             queue.add(5)
             queue.close()
         then: "it should contain 3 probes (+1 during close flush)"
-            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(new TestTailer()))
+            ProbeTailer tailer = TailerFactory.tailerFor(TestQueueUtil.PATH)
             tailer.probes() == 4
             tailer.close()
     }

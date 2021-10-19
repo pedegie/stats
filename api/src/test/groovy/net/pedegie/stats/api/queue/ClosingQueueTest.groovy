@@ -2,6 +2,7 @@ package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
 import net.pedegie.stats.api.tailer.ProbeTailer
+import net.pedegie.stats.api.tailer.TailerFactory
 import spock.lang.Specification
 
 class ClosingQueueTest extends Specification
@@ -49,7 +50,7 @@ class ClosingQueueTest extends Specification
             queue.add(5)
         then: "decorated queue contains all elements, but StatsQueue only 1 (+1 during close flush)"
             queue.size() == 4
-            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(new TestTailer()))
+            ProbeTailer tailer = TailerFactory.tailerFor(TestQueueUtil.PATH)
             tailer.probes() == 2
             tailer.close()
     }
@@ -72,9 +73,9 @@ class ClosingQueueTest extends Specification
             queue.close()
         then: "there are 2 elements, first added on first add because of millis condition met and second element added during close"
             TestTailer testTailer = new TestTailer()
-            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(testTailer))
+            ProbeTailer tailer = TailerFactory.tailerFor(TestQueueUtil.PATH, testTailer)
             tailer.probes() == 2
-            tailer.readProbes()
+            tailer.read()
             testTailer.probes.get(1).count == 4
             tailer.close()
     }
@@ -104,7 +105,7 @@ class ClosingQueueTest extends Specification
             queue.add(5)
             queue.close()
         then:
-            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(new TestTailer()))
+            ProbeTailer tailer = TailerFactory.tailerFor(TestQueueUtil.PATH)
             tailer.probes() == 1
             tailer.close()
     }

@@ -2,6 +2,7 @@ package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
 import net.pedegie.stats.api.tailer.ProbeTailer
+import net.pedegie.stats.api.tailer.TailerFactory
 import spock.lang.Specification
 
 class WriteFilterTest extends Specification
@@ -34,7 +35,7 @@ class WriteFilterTest extends Specification
             queue.add(1)
             queue.close()
         then: "there should be only last element in file (+1 during close flush)"
-            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(new TestTailer()))
+            ProbeTailer tailer = TailerFactory.tailerFor(TestQueueUtil.PATH)
             tailer.probes() == 2
             tailer.close()
     }
@@ -56,8 +57,7 @@ class WriteFilterTest extends Specification
             queue.add(1)
             queue.close()
         then: "there should 4 elements (+1 during close flush)"
-            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(new TestTailer()))
-            tailer.readProbes()
+            ProbeTailer tailer = TailerFactory.tailerFor(TestQueueUtil.PATH)
             tailer.probes() == 5
             tailer.close()
     }
