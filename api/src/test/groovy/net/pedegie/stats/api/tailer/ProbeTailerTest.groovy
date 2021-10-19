@@ -112,7 +112,7 @@ class ProbeTailerTest extends Specification
             probeTailer.close()
     }
 
-    private static void writeElementsTo(int elements, Path path)
+    static void writeElementsTo(int elements, Path path)
     {
         QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                 .path(path)

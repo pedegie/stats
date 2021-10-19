@@ -6,7 +6,7 @@ import net.openhft.chronicle.core.Jvm;
 import java.util.function.BooleanSupplier;
 
 @Slf4j
-class BusyWaiter
+public class BusyWaiter
 {
     public static void busyWait(BooleanSupplier condition, String conditionDescription)
     {
