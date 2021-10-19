@@ -74,4 +74,10 @@ class ProbeTailerImpl implements ProbeTailer
         chronicleTailer.moveToIndex(startIndex);
         return chronicleQueue.countExcerpts(startIndex, endIndex);
     }
+
+    @Override
+    public boolean isClosed()
+    {
+        return chronicleQueue.isClosed();
+    }
 }

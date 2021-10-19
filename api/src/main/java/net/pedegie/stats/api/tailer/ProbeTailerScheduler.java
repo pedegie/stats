@@ -1,11 +1,17 @@
 package net.pedegie.stats.api.tailer;
 
+import lombok.SneakyThrows;
 import net.openhft.chronicle.threads.MediumEventLoop;
 import net.openhft.chronicle.threads.Pauser;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class ProbeTailerScheduler
 {
     private static final int DEFAULT_PROBES_READ_ON_SINGLE_ACTION = 50;
+
+    private final List<ProbeTailer> tailers = new ArrayList<>(16);
 
     private final int probeReadOnSingleAction;
     private final MediumEventLoop[] threadLoops;
@@ -26,6 +32,7 @@ public class ProbeTailerScheduler
     public void addTailer(ProbeTailer tailer)
     {
         threadLoops[roundRobinIndex++ % threadLoops.length].addHandler(() -> tailer.read(probeReadOnSingleAction));
+        tailers.add(tailer);
     }
 
     public void close()
@@ -34,6 +41,14 @@ public class ProbeTailerScheduler
         {
             threadLoop.close();
         }
+
+        tailers.forEach(this::close);
+    }
+
+    @SneakyThrows
+    private void close(ProbeTailer tailer)
+    {
+        tailer.close();
     }
 
     public static ProbeTailerScheduler create(int threads)

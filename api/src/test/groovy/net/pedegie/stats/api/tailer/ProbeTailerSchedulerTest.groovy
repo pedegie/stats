@@ -22,6 +22,25 @@ class ProbeTailerSchedulerTest extends Specification
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
+    def "closing scheduler should close all tailers"()
+    {
+        given:
+            Path path1 = Paths.get(TestQueueUtil.PATH.toString() + "_1")
+            Path path2 = Paths.get(TestQueueUtil.PATH.toString() + "_2")
+            ProbeTailer tailer1 = TailerFactory.tailerFor(path1)
+            ProbeTailer tailer2 = TailerFactory.tailerFor(path2)
+        when:
+            ProbeTailerScheduler scheduler = ProbeTailerScheduler.create(2, 5)
+            scheduler.addTailer(tailer1)
+            scheduler.addTailer(tailer2)
+        and:
+            scheduler.close()
+        then:
+            tailer1.isClosed()
+            tailer2.isClosed()
+
+    }
+
     def "should dispatch and concurrently process all handlers on all threads"()
     {
         given: "write probes to 4 files"
@@ -55,7 +74,8 @@ class ProbeTailerSchedulerTest extends Specification
             tailer2.invocations == 3
             tailer3.invocations == 4
             tailer4.invocations == 5
-
+        cleanup:
+            scheduler.close()
     }
 
     static void waitUntilRead(CountingInvocationsTailer tailer, int requiredElements)
@@ -103,6 +123,12 @@ class ProbeTailerSchedulerTest extends Specification
         long probes()
         {
             return originalTailer.probes()
+        }
+
+        @Override
+        boolean isClosed()
+        {
+            return originalTailer.isClosed()
         }
 
         @Override

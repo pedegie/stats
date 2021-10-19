@@ -12,6 +12,8 @@ public interface ProbeTailer extends Closeable
 
     long probes();
 
+    boolean isClosed();
+
     static ProbeTailer from(TailerConfiguration tailerConfiguration)
     {
         return new ProbeTailerImpl(tailerConfiguration);

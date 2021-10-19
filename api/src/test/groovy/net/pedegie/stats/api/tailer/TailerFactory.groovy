@@ -18,7 +18,7 @@ class TailerFactory
                 .tailer(from)
                 .path(path)
                 .build()
-        return ProbeTailerImpl.from(configuration)
+        return ProbeTailer.from(configuration)
     }
 
 }

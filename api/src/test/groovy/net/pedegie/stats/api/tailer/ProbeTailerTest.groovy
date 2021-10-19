@@ -31,7 +31,7 @@ class ProbeTailerTest extends Specification
                     .tailer(tailer)
                     .path(TestQueueUtil.PATH)
                     .build()
-            ProbeTailer probeTailer = ProbeTailerImpl.from(configuration)
+            ProbeTailer probeTailer = ProbeTailer.from(configuration)
         when:
             probeTailer.read(10)
         then:
@@ -49,12 +49,12 @@ class ProbeTailerTest extends Specification
                     .tailer(tailer)
                     .path(TestQueueUtil.PATH)
                     .build()
-            ProbeTailer probeTailer = ProbeTailerImpl.from(configuration)
+            ProbeTailer probeTailer = ProbeTailer.from(configuration)
         when: "read first 10 probes"
             probeTailer.read(10)
             probeTailer.close()
         and:
-            probeTailer = ProbeTailerImpl.from(configuration)
+            probeTailer = ProbeTailer.from(configuration)
         then: "it has 10 elements more"
             probeTailer.probes() == 10
         when: "read from start"
@@ -74,11 +74,11 @@ class ProbeTailerTest extends Specification
                     .tailer(tailer)
                     .path(TestQueueUtil.PATH)
                     .build()
-            ProbeTailer probeTailer = ProbeTailerImpl.from(configuration)
+            ProbeTailer probeTailer = ProbeTailer.from(configuration)
         when:
             probeTailer.read(3)
             probeTailer.close()
-            probeTailer = ProbeTailerImpl.from(configuration)
+            probeTailer = ProbeTailer.from(configuration)
             probeTailer.read()
         then:
             tailer.probes.size() == 10
@@ -95,7 +95,7 @@ class ProbeTailerTest extends Specification
                     .tailer(tailer)
                     .path(TestQueueUtil.PATH)
                     .build()
-            ProbeTailer probeTailer = ProbeTailerImpl.from(configuration)
+            ProbeTailer probeTailer = ProbeTailer.from(configuration)
         when:
             boolean readAll = probeTailer.read(9)
         then:
