@@ -2,6 +2,7 @@ package net.pedegie.stats.api.queue
 
 import net.openhft.chronicle.core.OS
 import net.pedegie.stats.api.tailer.ProbeTailer
+import net.pedegie.stats.api.tailer.TailerFactory
 import spock.lang.Specification
 
 import java.nio.file.Path
@@ -36,7 +37,7 @@ class FlushThresholdTest extends Specification
             queue.add(5)
             queue.close()
         then: "there are only 2 probes (+1 during close flush)"
-            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(new TestTailer()))
+            ProbeTailer tailer = TailerFactory.tailerFor(TestQueueUtil.PATH)
             tailer.probes() == 3
             tailer.close()
     }
@@ -56,7 +57,7 @@ class FlushThresholdTest extends Specification
             queue.remove(2)
             queue.close()
         then: "it contains only two elements, one added on first add second during flush on close"
-            ProbeTailer tailer = ProbeTailer.from(queueConfiguration.withTailer(new TestTailer()))
+            ProbeTailer tailer = TailerFactory.tailerFor(TestQueueUtil.PATH)
             tailer.probes() == 2
             tailer.close()
         when: "put there 4 elements, two at each add"
@@ -66,7 +67,7 @@ class FlushThresholdTest extends Specification
             queue.removeAll([1, 2])
             queue.close()
         then: "there are 2 probes added during add/remove (+1 during close flush)"
-            ProbeTailer tailer2 = ProbeTailer.from(queueConfiguration.withPath(newPath).withTailer(new TestTailer()))
+            ProbeTailer tailer2 = TailerFactory.tailerFor(newPath)
             tailer2.probes() == 3
             tailer2.close()
     }

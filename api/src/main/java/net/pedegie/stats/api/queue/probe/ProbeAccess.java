@@ -5,15 +5,12 @@ import net.openhft.chronicle.bytes.BytesOut;
 
 public interface ProbeAccess
 {
-    default void writeProbe(BytesOut<?> mmapedFile, int count, long timestamp)
-    {
-        mmapedFile.writeInt(count);
-        mmapedFile.writeLong(timestamp);
-    }
+    void writeProbe(BytesOut<?> mmapedFile, int count, long timestamp);
 
-    default void readProbeInto(BytesIn<?> mmapedFile, ProbeHolder probe)
+    void readProbeInto(BytesIn<?> mmapedFile, ProbeHolder probe);
+
+    static ProbeAccess defaultAccess()
     {
-        probe.setCount(mmapedFile.readInt());
-        probe.setTimestamp(mmapedFile.readLong());
+        return DefaultProbeAccess.INSTANCE;
     }
 }
