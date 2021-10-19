@@ -31,7 +31,7 @@ class ProbeTailerTest extends Specification
                     .tailer(tailer)
                     .path(TestQueueUtil.PATH)
                     .build()
-            ProbeTailer probeTailer = ProbeTailer.from(configuration)
+            ProbeTailer probeTailer = ProbeTailerImpl.from(configuration)
         when:
             probeTailer.read(10)
         then:
@@ -49,12 +49,12 @@ class ProbeTailerTest extends Specification
                     .tailer(tailer)
                     .path(TestQueueUtil.PATH)
                     .build()
-            ProbeTailer probeTailer = ProbeTailer.from(configuration)
+            ProbeTailer probeTailer = ProbeTailerImpl.from(configuration)
         when: "read first 10 probes"
             probeTailer.read(10)
             probeTailer.close()
         and:
-            probeTailer = ProbeTailer.from(configuration)
+            probeTailer = ProbeTailerImpl.from(configuration)
         then: "it has 10 elements more"
             probeTailer.probes() == 10
         when: "read from start"
@@ -74,11 +74,11 @@ class ProbeTailerTest extends Specification
                     .tailer(tailer)
                     .path(TestQueueUtil.PATH)
                     .build()
-            ProbeTailer probeTailer = ProbeTailer.from(configuration)
+            ProbeTailer probeTailer = ProbeTailerImpl.from(configuration)
         when:
             probeTailer.read(3)
             probeTailer.close()
-            probeTailer = ProbeTailer.from(configuration)
+            probeTailer = ProbeTailerImpl.from(configuration)
             probeTailer.read()
         then:
             tailer.probes.size() == 10
@@ -95,7 +95,7 @@ class ProbeTailerTest extends Specification
                     .tailer(tailer)
                     .path(TestQueueUtil.PATH)
                     .build()
-            ProbeTailer probeTailer = ProbeTailer.from(configuration)
+            ProbeTailer probeTailer = ProbeTailerImpl.from(configuration)
         when:
             boolean readAll = probeTailer.read(9)
         then:
@@ -112,7 +112,7 @@ class ProbeTailerTest extends Specification
             probeTailer.close()
     }
 
-    private static void writeElementsTo(int elements, Path path)
+    static void writeElementsTo(int elements, Path path)
     {
         QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                 .path(path)

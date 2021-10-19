@@ -9,7 +9,6 @@ import net.pedegie.stats.api.tailer.ProbeTailer
 import net.pedegie.stats.api.tailer.TailerFactory
 import spock.lang.Specification
 
-
 class ErrorHandlerTest extends Specification
 {
     def setup()
