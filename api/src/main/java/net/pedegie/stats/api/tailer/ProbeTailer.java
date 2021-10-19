@@ -34,15 +34,6 @@ public class ProbeTailer implements Closeable
         this.probeAccess = tailerConfiguration.getProbeAccess();
     }
 
-    long probes()
-    {
-        var currentIndex = chronicleTailer.index();
-        var startIndex = currentIndex == 0 ? chronicleTailer.toStart().index() : currentIndex;
-        var endIndex = chronicleTailer.toEnd().index();
-        chronicleTailer.moveToIndex(startIndex);
-        return chronicleQueue.countExcerpts(startIndex, endIndex);
-    }
-
     public boolean read(long amount)
     {
         while (amount-- > 0)
@@ -76,5 +67,14 @@ public class ProbeTailer implements Closeable
     public void close()
     {
         chronicleQueue.close();
+    }
+
+    long probes()
+    {
+        var currentIndex = chronicleTailer.index();
+        var startIndex = currentIndex == 0 ? chronicleTailer.toStart().index() : currentIndex;
+        var endIndex = chronicleTailer.toEnd().index();
+        chronicleTailer.moveToIndex(startIndex);
+        return chronicleQueue.countExcerpts(startIndex, endIndex);
     }
 }
