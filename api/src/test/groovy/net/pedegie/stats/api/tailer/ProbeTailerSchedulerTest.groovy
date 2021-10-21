@@ -7,6 +7,7 @@ import spock.lang.Specification
 
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicInteger
 
 import static net.pedegie.stats.api.tailer.ProbeTailerTest.writeElementsTo
 
@@ -38,7 +39,6 @@ class ProbeTailerSchedulerTest extends Specification
         then:
             tailer1.isClosed()
             tailer2.isClosed()
-
     }
 
     def "should dispatch and concurrently process all handlers on all threads"()
@@ -70,10 +70,14 @@ class ProbeTailerSchedulerTest extends Specification
             waitUntilRead(tailer3, 20)
             waitUntilRead(tailer4, 25)
         and: "tailers were fairly scheduled"
-            tailer1.invocations == 2
-            tailer2.invocations == 3
-            tailer3.invocations == 4
-            tailer4.invocations == 5
+            tailer1.invoked.size() == 2
+            tailer2.invoked.size() == 3
+            tailer3.invoked.size() == 4
+            tailer4.invoked.size() == 5
+            invocationsNotHappenedOneByOne(tailer1)
+            invocationsNotHappenedOneByOne(tailer2)
+            invocationsNotHappenedOneByOne(tailer3)
+            invocationsNotHappenedOneByOne(tailer4)
         cleanup:
             scheduler.close()
     }
@@ -83,9 +87,30 @@ class ProbeTailerSchedulerTest extends Specification
         BusyWaiter.busyWait({ tailer.readElements >= requiredElements }, "Waiting until tailer read all elements " + requiredElements)
     }
 
+    boolean invocationsNotHappenedOneByOne(CountingInvocationsTailer invocations)
+    {
+        invocations.invoked.removeLast()
+        if(invocations.invoked.isEmpty())
+            return true
+
+        boolean notOneByOne = true
+
+        Iterator<Integer> elems = invocations.invoked.iterator()
+        int previousElement = elems.next()
+        while(elems.hasNext() && notOneByOne)
+        {
+            int nextElement = elems.next()
+            notOneByOne =  nextElement - previousElement > 1
+            previousElement = nextElement
+        }
+
+        return notOneByOne
+    }
+
     private static class CountingInvocationsTailer implements ProbeTailer
     {
-        volatile int invocations = 0
+        private static final AtomicInteger invocationCounter = new AtomicInteger(0)
+        List<Integer> invoked = new ArrayList<>(10)
         volatile int readElements = 0
 
         private final ProbeTailer originalTailer
@@ -101,7 +126,7 @@ class ProbeTailerSchedulerTest extends Specification
             boolean readAll = originalTailer.read(amount)
             if (readAll)
             {
-                invocations++
+                invoked.add(invocationCounter.incrementAndGet())
             }
             readElements += amount
             return readAll
