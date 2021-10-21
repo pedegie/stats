@@ -1,7 +1,6 @@
 package net.pedegie.stats.api.queue;
 
 import lombok.SneakyThrows;
-import net.openhft.chronicle.core.OS;
 
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -54,11 +53,5 @@ public class FileUtils
     private static boolean directoryIsEmpty(Iterator<Path> entries)
     {
         return !entries.hasNext();
-    }
-
-    public static int roundToPageSize(int mmapSize)
-    {
-        int rounded = mmapSize + OS.pageSize() - 1 & (-OS.pageSize());
-        return rounded < 0 ? Integer.MAX_VALUE : rounded;
     }
 }

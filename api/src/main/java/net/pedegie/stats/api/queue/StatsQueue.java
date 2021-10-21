@@ -38,6 +38,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     @NonFinal
     private volatile int state = FREE;
     FlushThreshold flushThreshold;
+    LongAdder dropped;
     @NonFinal
     long nextWriteTimestamp;
     ProbeAccess probeWriter;
@@ -67,7 +68,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
             this.chronicleQueue = SingleChronicleQueueBuilder
                     .binary(queueConfiguration.getPath())
                     .rollCycle(queueConfiguration.getRollCycle())
-                    .blockSize(FileUtils.roundToPageSize(queueConfiguration.getMmapSize()))
+                    .blockSize(queueConfiguration.getMmapSize())
                     .build();
             this.accessErrorHandler = queueConfiguration.getErrorHandler();
 
@@ -81,6 +82,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
             this.internalFileAccess = queueConfiguration.getInternalFileAccess();
             this.flushThreshold = queueConfiguration.getFlushThreshold();
             this.nextWriteTimestamp = time();
+            this.dropped = queueConfiguration.isCountDropped() ? new LongAdder() : null;
         } catch (Exception e)
         {
             queues.remove(queueConfiguration.getPath().toString());
@@ -276,19 +278,19 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         try
         {
             var time = time();
-            if (time >= nextWriteTimestamp || difference >= flushThreshold.getMinSizeDifference())
+            if ((time >= nextWriteTimestamp || difference >= flushThreshold.getMinSizeDifference()) && STATE_UPDATER.compareAndSet(this, FREE, BUSY))
             {
-                if (STATE_UPDATER.compareAndSet(this, FREE, BUSY))
+                try
                 {
-                    try
-                    {
-                        write(time, appender);
-                        nextWriteTimestamp = time + flushThreshold.getDelayBetweenWritesMillis();
-                    } finally
-                    {
-                        state = FREE;
-                    }
+                    write(time, appender);
+                    nextWriteTimestamp = time + flushThreshold.getDelayBetweenWritesMillis();
+                } finally
+                {
+                    state = FREE;
                 }
+            } else if (countDropped())
+            {
+                dropped.increment();
             }
         } catch (Exception e)
         {
@@ -305,6 +307,9 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         if (count > -1 && writeFilter.shouldWrite(count, time))
         {
             appender.writeBytes(bytes -> probeWriter.writeProbe(bytes, count, time));
+        } else if (countDropped())
+        {
+            dropped.increment();
         }
     }
 
@@ -328,6 +333,16 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         {
             accessErrorHandler.onError(e);
         }
+    }
+
+    public long getDropped()
+    {
+        return countDropped() ? dropped.sum() : -1;
+    }
+
+    private boolean countDropped()
+    {
+        return dropped != null;
     }
 
     private void flush()
