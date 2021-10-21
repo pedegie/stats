@@ -6,7 +6,6 @@ import lombok.experimental.FieldDefaults;
 import net.openhft.chronicle.queue.ExcerptTailer;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
-import net.pedegie.stats.api.queue.FileUtils;
 import net.pedegie.stats.api.queue.probe.ProbeAccess;
 import net.pedegie.stats.api.queue.probe.ProbeHolder;
 
@@ -24,7 +23,7 @@ class ProbeTailerImpl implements ProbeTailer
     {
         this.chronicleQueue = SingleChronicleQueueBuilder
                 .binary(tailerConfiguration.getPath())
-                .blockSize(FileUtils.roundToPageSize(tailerConfiguration.getMmapSize()))
+                .blockSize(tailerConfiguration.getMmapSize())
                 .build();
 
         this.tailer = tailerConfiguration.getTailer();
