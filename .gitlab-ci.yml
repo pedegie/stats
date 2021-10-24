@@ -2,17 +2,27 @@ image: maven:3-jdk-11
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
-  LONG_RUNNING_TESTS: "true"
 
 cache:
   paths:
     - .m2/repository/
-    - target/
 
-pipeline:
-  stage: build
+merge_request:
+  stage: test
   script:
     - mvn test
   only:
     - merge_requests
+
+master:
+  stage: test
+  variables:
+    FF_NETWORK_PER_BUILD: 1
+  services:
+    - name: lossuperktos/stats-prometheus
+      alias: prometheus
+  script:
+    - export INTEGRATION_TESTS=false
+    - mvn test
+  only:
     - master

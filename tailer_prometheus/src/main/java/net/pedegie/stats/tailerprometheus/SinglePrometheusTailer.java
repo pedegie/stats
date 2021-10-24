@@ -4,6 +4,7 @@ import io.prometheus.client.Collector;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 import net.pedegie.stats.api.queue.probe.Probe;
 import net.pedegie.stats.api.tailer.Tailer;
 
@@ -11,31 +12,34 @@ import java.util.Collections;
 import java.util.List;
 
 import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
 
 @RequiredArgsConstructor
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 class SinglePrometheusTailer extends Collector implements Tailer
 {
-    SPSCConcurrentArrayList<MetricFamilySamples.Sample> samples = new SPSCConcurrentArrayList<>(1024);
+    @NonFinal
+    volatile MetricFamilySamples.Sample sample;
     String source;
+    Runnable onClose;
+    boolean generateTimestampOnRequestReceive;
 
     @Override
     public void onProbe(Probe probe)
     {
-        samples.add(new MetricFamilySamples.Sample(source, emptyList(), emptyList(), probe.getCount(), probe.getTimestamp()));
+        var timestamp = generateTimestampOnRequestReceive ? System.currentTimeMillis() : probe.getTimestamp();
+        sample = new MetricFamilySamples.Sample(source, emptyList(), emptyList(), probe.getCount(), timestamp);
     }
 
     @Override
     public List<MetricFamilySamples> collect()
     {
-        return Collections.singletonList(new ProbeSamples(source, Type.UNKNOWN, "collection size", samples.drain()));
+        return Collections.singletonList(new Collector.MetricFamilySamples(source, Type.GAUGE, "collection size", singletonList(sample)));
     }
 
-    private static class ProbeSamples extends Collector.MetricFamilySamples
+    @Override
+    public void onClose()
     {
-        public ProbeSamples(String name, Collector.Type type, String help, List<Sample> samples)
-        {
-            super(name, type, help, samples);
-        }
+        onClose.run();
     }
 }

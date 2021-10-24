@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PrometheusTailer extends Collector
 {
     public static final PrometheusTailer INSTANCE = new PrometheusTailer();
@@ -26,15 +26,20 @@ public class PrometheusTailer extends Collector
 
     public Tailer newTailer(String source)
     {
-        SinglePrometheusTailer tailer = new SinglePrometheusTailer(source);
+        return newTailer(source, false);
+    }
+
+    public Tailer newTailer(String source, boolean generateTimestampOnRequestReceive)
+    {
+        SinglePrometheusTailer tailer = new SinglePrometheusTailer(source, () -> tailers.remove(source), generateTimestampOnRequestReceive);
         if (tailers.putIfAbsent(source, tailer) != null)
             throw new IllegalStateException("Source '" + source + "' already exists.");
 
         return tailer;
     }
 
-    public void removeTailer(String source)
+    public boolean removeTailer(String source)
     {
-        tailers.remove(source);
+        return tailers.remove(source) != null;
     }
 }
