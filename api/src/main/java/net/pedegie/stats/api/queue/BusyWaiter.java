@@ -8,7 +8,7 @@ import java.util.function.BooleanSupplier;
 @Slf4j
 public class BusyWaiter
 {
-    public static void busyWait(BooleanSupplier condition, String conditionDescription)
+    public static boolean busyWait(BooleanSupplier condition, int maxWaitSeconds, String conditionDescription)
     {
         double waits = 0;
         int seconds = 1;
@@ -21,9 +21,14 @@ public class BusyWaiter
             if (waits >= 1e9)
             {
                 log.warn("Busy wait exceeds {} seconds for {}", seconds++, conditionDescription);
+                if (seconds >= maxWaitSeconds)
+                {
+                    return false;
+                }
                 waits = 0;
             }
         }
+        return true;
     }
 
     private static void busyWait(double nanos)

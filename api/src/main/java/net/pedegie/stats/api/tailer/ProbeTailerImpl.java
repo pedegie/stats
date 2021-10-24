@@ -62,6 +62,7 @@ class ProbeTailerImpl implements ProbeTailer
     public void close()
     {
         chronicleQueue.close();
+        tailer.onClose();
     }
 
     @Override

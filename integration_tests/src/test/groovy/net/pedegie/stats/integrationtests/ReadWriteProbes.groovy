@@ -1,6 +1,5 @@
 package net.pedegie.stats.integrationtests
 
-
 import net.openhft.chronicle.core.OS
 import net.pedegie.stats.api.queue.BusyWaiter
 import net.pedegie.stats.api.queue.FileUtils
@@ -208,8 +207,7 @@ class ReadWriteProbes extends Specification
             BusyWaiter.busyWait({
                 long read = tailer1.probesRead + tailer2.probesRead + statsQueue1.dropped + statsQueue2.dropped
                 read == requiredAmountOfReadElements
-            }, "waiting for tailers read")
-
+            }, 5, "waiting for tailers read")
 
             scheduler.close()
             pool.shutdown()
