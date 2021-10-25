@@ -18,8 +18,6 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
-import java.util.concurrent.atomic.LongAdder;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
 @Slf4j
@@ -32,19 +30,17 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     ExcerptAppender appender;
     FileAccessErrorHandler accessErrorHandler;
     InternalFileAccess internalFileAccess;
+    boolean disableSync;
+    StateUpdater stateUpdater;
 
-    private static final int FREE = 0, BUSY = 1, CLOSING = 2, CLOSED = 3;
-    private static final AtomicIntegerFieldUpdater<StatsQueue> STATE_UPDATER = AtomicIntegerFieldUpdater.newUpdater(StatsQueue.class, "state");
-    @NonFinal
-    private volatile int state = FREE;
     FlushThreshold flushThreshold;
-    LongAdder dropped;
+    Adder dropped;
     @NonFinal
     long nextWriteTimestamp;
     ProbeAccess probeWriter;
 
     @NonFinal
-    volatile LongAdder adder = new LongAdder();
+    volatile Adder adder;
     Thread appenderThread;
 
     @NonFinal
@@ -76,13 +72,16 @@ public class StatsQueue<T> implements Queue<T>, Closeable
             {
                 new Pretoucher(chronicleQueue).execute();
             }
+            this.disableSync = queueConfiguration.isDisableSynchronization();
             this.appender = acquireAppender();
             this.appenderThread = Thread.currentThread();
             this.probeWriter = queueConfiguration.getProbeAccess();
             this.internalFileAccess = queueConfiguration.getInternalFileAccess();
             this.flushThreshold = queueConfiguration.getFlushThreshold();
             this.nextWriteTimestamp = time();
-            this.dropped = queueConfiguration.isCountDropped() ? new LongAdder() : null;
+            this.dropped = queueConfiguration.isCountDropped() ? newAdder() : null;
+            this.adder = newAdder();
+            this.stateUpdater = disableSync ? Synchronizer.NON_SYNCHRONIZED.newStateUpdater() : Synchronizer.CONCURRENT.newStateUpdater();
         } catch (Exception e)
         {
             queues.remove(queueConfiguration.getPath().toString());
@@ -219,7 +218,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     {
         var difference = queue.size();
         queue.clear();
-        adder = new LongAdder();
+        adder = newAdder();
         write(difference);
     }
 
@@ -278,7 +277,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         try
         {
             var time = time();
-            if ((time >= nextWriteTimestamp || difference >= flushThreshold.getMinSizeDifference()) && STATE_UPDATER.compareAndSet(this, FREE, BUSY))
+            if ((time >= nextWriteTimestamp || difference >= flushThreshold.getMinSizeDifference()) && stateUpdater.intoBusy())
             {
                 try
                 {
@@ -286,7 +285,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
                     nextWriteTimestamp = time + flushThreshold.getDelayBetweenWritesMillis();
                 } finally
                 {
-                    state = FREE;
+                    stateUpdater.intoFree();
                 }
             } else if (countDropped())
             {
@@ -318,7 +317,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     {
         try
         {
-            if (STATE_UPDATER.getAndSet(this, CLOSING) != CLOSED)
+            if (stateUpdater.intoClosing())
             {
                 if (firstClose)
                 {
@@ -327,7 +326,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
                 }
                 internalFileAccess.close(chronicleQueue);
                 queues.remove(chronicleQueue.file().getAbsolutePath());
-                STATE_UPDATER.set(this, CLOSED);
+                stateUpdater.intoClosed();
             }
         } catch (Exception e)
         {
@@ -356,5 +355,10 @@ public class StatsQueue<T> implements Queue<T>, Closeable
             return chronicleQueue.acquireAppender();
 
         return appender;
+    }
+
+    private Adder newAdder()
+    {
+        return disableSync ? Synchronizer.NON_SYNCHRONIZED.newAdder() : Synchronizer.CONCURRENT.newAdder();
     }
 }
