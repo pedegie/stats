@@ -25,6 +25,7 @@ class FlushThresholdTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
+                    .batchSize(1)
                     .flushThreshold(FlushThreshold.of(10, 2))
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
@@ -47,6 +48,7 @@ class FlushThresholdTest extends Specification
         given:
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .batchSize(1)
                     .mmapSize(OS.pageSize())
                     .flushThreshold(FlushThreshold.minSizeDifference(2))
                     .build()

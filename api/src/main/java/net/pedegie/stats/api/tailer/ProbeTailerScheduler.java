@@ -19,6 +19,7 @@ public class ProbeTailerScheduler
 
     private ProbeTailerScheduler(int threads, int probeReadOnSingleAction)
     {
+        System.setProperty("disable.thread.safety", "true");
         this.probeReadOnSingleAction = probeReadOnSingleAction;
         this.threadLoops = new MediumEventLoop[threads];
         for (int i = 0; i < threads; i++)

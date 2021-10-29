@@ -54,6 +54,7 @@ class ReadWriteProbes extends Specification
 
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(PATH)
+                    .batchSize(1)
                     .flushThreshold(FlushThreshold.of(0, 1))
                     .mmapSize(OS.pageSize())
                     .build()
@@ -85,6 +86,7 @@ class ReadWriteProbes extends Specification
 
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(PATH)
+                    .batchSize(1)
                     .flushThreshold(FlushThreshold.of(0, 1))
                     .mmapSize(OS.pageSize())
                     .build()
@@ -122,6 +124,7 @@ class ReadWriteProbes extends Specification
             QueueConfiguration queueConfiguration1 = QueueConfiguration.builder()
                     .path(PATH_1)
                     .countDropped(true)
+                    .batchSize(1)
                     .mmapSize(Integer.MAX_VALUE)
                     .build()
             QueueConfiguration queueConfiguration2 = queueConfiguration1.withPath(PATH_2)
@@ -204,7 +207,7 @@ class ReadWriteProbes extends Specification
             pool.submit(addElementsToQueue2)
             scheduler.addTailer(probeTailer1)
 
-            BusyWaiter.busyWait({
+            boolean allRead = BusyWaiter.busyWait({
                 long read = tailer1.probesRead + tailer2.probesRead + statsQueue1.dropped + statsQueue2.dropped
                 read == requiredAmountOfReadElements
             }, 5, "waiting for tailers read")
@@ -216,6 +219,7 @@ class ReadWriteProbes extends Specification
             boolean terminated = pool.awaitTermination(30, TimeUnit.SECONDS)
         then: "probe tailers have read all probes"
             terminated
+            allRead
 
     }
 

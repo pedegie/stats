@@ -11,6 +11,8 @@ import lombok.Setter;
 @NoArgsConstructor
 public class ProbeHolder implements Probe
 {
+    public static final int PROBE_SIZE = 12;
+
     int count;
     long timestamp;
 
