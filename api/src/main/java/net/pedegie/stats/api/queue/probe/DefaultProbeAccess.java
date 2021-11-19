@@ -1,5 +1,6 @@
 package net.pedegie.stats.api.queue.probe;
 
+import net.openhft.chronicle.bytes.Bytes;
 import net.openhft.chronicle.bytes.BytesIn;
 import net.openhft.chronicle.bytes.BytesOut;
 
@@ -19,5 +20,11 @@ class DefaultProbeAccess implements ProbeAccess
     {
         probe.setCount(mmapedFile.readInt());
         probe.setTimestamp(mmapedFile.readLong());
+    }
+
+    @Override
+    public void batchWrite(Bytes<?> bytes, Bytes batchBytes)
+    {
+        bytes.write(batchBytes);
     }
 }

@@ -88,6 +88,7 @@ class ErrorHandlerTest extends Specification
 
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .batchSize(1)
                     .disableCompression(true)
                     .mmapSize(OS.pageSize())
                     .flushThreshold(FlushThreshold.flushOnEachWrite())
@@ -99,6 +100,9 @@ class ErrorHandlerTest extends Specification
                         {
                             if (++written == 1)
                                 throw new TestExpectedException()
+
+                            mmapedFile.writeInt(count)
+                            mmapedFile.writeLong(timestamp)
                         }
 
                         @Override
@@ -130,6 +134,7 @@ class ErrorHandlerTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .disableCompression(true)
+                    .batchSize(1)
                     .flushThreshold(FlushThreshold.flushOnEachWrite())
                     .mmapSize(OS.pageSize())
                     .probeAccess(new ProbeAccess() {
@@ -159,9 +164,9 @@ class ErrorHandlerTest extends Specification
             queue.add(5)
             queue.add(5)
             queue.close()
-        then: "it should contain 3 probes (+1 during close flush)"
+        then: "it should contain 2 probes (+1 during close flush)"
             ProbeTailer tailer = TailerFactory.tailerFor(TestQueueUtil.PATH)
-            tailer.probes() == 4
+            tailer.probes() == 3
             tailer.close()
     }
 }

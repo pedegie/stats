@@ -39,6 +39,7 @@ class ClosingQueueTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
+                    .batchSize(1)
                     .flushThreshold(FlushThreshold.flushOnEachWrite())
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
@@ -60,6 +61,7 @@ class ClosingQueueTest extends Specification
         given: "queue with delay 5 seconds between writes"
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
+                    .batchSize(1)
                     .mmapSize(OS.pageSize())
                     .flushThreshold(FlushThreshold.of(5000, 2))
                     .build()

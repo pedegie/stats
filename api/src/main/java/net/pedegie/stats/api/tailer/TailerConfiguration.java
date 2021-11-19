@@ -21,4 +21,6 @@ public class TailerConfiguration
     ProbeAccess probeAccess = ProbeAccess.defaultAccess();
     int mmapSize;
     boolean preTouch;
+    @Builder.Default
+    int batchSize = 50;
 }

@@ -6,10 +6,12 @@ import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
+import net.openhft.chronicle.bytes.Bytes;
 import net.openhft.chronicle.queue.ExcerptAppender;
 import net.openhft.chronicle.queue.impl.single.Pretoucher;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
+import net.openhft.chronicle.wire.DocumentContext;
 import net.pedegie.stats.api.queue.probe.ProbeAccess;
 import org.jetbrains.annotations.NotNull;
 
@@ -18,6 +20,8 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static net.pedegie.stats.api.queue.probe.ProbeHolder.PROBE_SIZE;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
 @Slf4j
@@ -45,6 +49,8 @@ public class StatsQueue<T> implements Queue<T>, Closeable
 
     @NonFinal
     boolean firstClose = true;
+    @SuppressWarnings("rawtypes")
+    Bytes batchBytes;
 
     @Builder
     @SneakyThrows
@@ -65,7 +71,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
                     .binary(queueConfiguration.getPath())
                     .rollCycle(queueConfiguration.getRollCycle())
                     .blockSize(queueConfiguration.getMmapSize())
-                    .build();
+                    .build(); // todo index spacing
             this.accessErrorHandler = queueConfiguration.getErrorHandler();
 
             if (queueConfiguration.isPreTouch())
@@ -82,6 +88,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
             this.dropped = queueConfiguration.isCountDropped() ? newAdder() : null;
             this.adder = newAdder();
             this.stateUpdater = disableSync ? Synchronizer.NON_SYNCHRONIZED.newStateUpdater() : Synchronizer.CONCURRENT.newStateUpdater();
+            this.batchBytes = Bytes.allocateDirect((long) queueConfiguration.getBatchSize() * PROBE_SIZE);
         } catch (Exception e)
         {
             queues.remove(queueConfiguration.getPath().toString());
@@ -274,38 +281,50 @@ public class StatsQueue<T> implements Queue<T>, Closeable
 
     private void write(int difference)
     {
-        try
+        var time = time();
+        if (messagesNotComesTooFast(difference, time) && stateUpdater.intoBusy())
         {
-            var time = time();
-            if ((time >= nextWriteTimestamp || difference >= flushThreshold.getMinSizeDifference()) && stateUpdater.intoBusy())
+            try
             {
-                try
+                write(time, appender, false);
+                nextWriteTimestamp = time + flushThreshold.getDelayBetweenWritesMillis();
+                stateUpdater.intoFree();
+            } catch (Exception e)
+            {
+                if (accessErrorHandler.onError(e))
                 {
-                    write(time, appender);
-                    nextWriteTimestamp = time + flushThreshold.getDelayBetweenWritesMillis();
-                } finally
+                    close();
+                } else
                 {
                     stateUpdater.intoFree();
                 }
-            } else if (countDropped())
-            {
-                dropped.increment();
             }
-        } catch (Exception e)
+        } else if (countDropped())
         {
-            if (accessErrorHandler.onError(e))
-            {
-                close();
-            }
+            dropped.increment();
         }
     }
 
-    private void write(long time, ExcerptAppender appender)
+    private boolean messagesNotComesTooFast(int difference, long time)
+    {
+        return time >= nextWriteTimestamp || difference >= flushThreshold.getMinSizeDifference();
+    }
+
+    private void write(long time, ExcerptAppender appender, boolean flush)
     {
         var count = adder.intValue();
         if (count > -1 && writeFilter.shouldWrite(count, time))
         {
-            appender.writeBytes(bytes -> probeWriter.writeProbe(bytes, count, time));
+            probeWriter.writeProbe(batchBytes, count, time);
+
+            if (batchBytes.realCapacity() - batchBytes.writePosition() == 0 || flush)
+            {
+                try (DocumentContext dc = appender.writingDocument())
+                {
+                    probeWriter.batchWrite(dc.wire().bytes(), batchBytes);
+                }
+                batchBytes.clear();
+            }
         } else if (countDropped())
         {
             dropped.increment();
@@ -322,6 +341,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
                 if (firstClose)
                 {
                     flush();
+                    batchBytes.releaseLast();
                     firstClose = false;
                 }
                 internalFileAccess.close(chronicleQueue);
@@ -346,7 +366,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
 
     private void flush()
     {
-        write(time(), acquireAppender());
+        write(time(), acquireAppender(), true);
     }
 
     private ExcerptAppender acquireAppender()

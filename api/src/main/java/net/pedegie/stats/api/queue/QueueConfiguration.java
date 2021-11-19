@@ -21,7 +21,7 @@ public class QueueConfiguration
 
     Path path;
     @Builder.Default
-    int mmapSize = MB_500;
+    long mmapSize = MB_500;
     @Builder.Default
     RollCycle rollCycle = RollCycles.DAILY;
     boolean disableCompression;
@@ -40,4 +40,6 @@ public class QueueConfiguration
     FlushThreshold flushThreshold = FlushThreshold.defaultThreshold();
     @Builder.Default
     boolean countDropped = false;
+    @Builder.Default
+    int batchSize = 50;
 }

@@ -51,6 +51,19 @@ class QueueCreationTest extends Specification
             queue.close()
     }
 
+    def "should throw an exception when batch size is less than 1"()
+    {
+        given:
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .batchSize(0)
+                    .build()
+        when:
+            TestQueueUtil.createQueue(queueConfiguration)
+        then:
+            thrown(IllegalArgumentException)
+    }
+
     private static ByteBuffer wrap(byte[] bytes)
     {
         return ByteBuffer.wrap(bytes)

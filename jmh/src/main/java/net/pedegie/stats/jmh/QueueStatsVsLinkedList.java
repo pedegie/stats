@@ -31,32 +31,32 @@ import java.util.function.Supplier;
 
 /*
 Benchmark                                                    Mode  Cnt   Score   Error  Units
-QueueStatsVsLinkedList.TestBenchmark2.AStatsQueueLinkedList              avgt    4  3.331 ± 0.251  ms/op
-QueueStatsVsLinkedList.TestBenchmark2.AStatsQueueLinkedListDisabledSync  avgt    4  3.232 ± 0.551  ms/op
-QueueStatsVsLinkedList.TestBenchmark2.LinkedList                         avgt    4  0.121 ± 0.006  ms/op
+QueueStatsVsLinkedList.TestBenchmark2.AStatsQueueLinkedList              avgt    4  502.038 ± 115.764  us/op
+QueueStatsVsLinkedList.TestBenchmark2.AStatsQueueLinkedListDisabledSync  avgt    4  380.309 ± 100.996  us/op
+QueueStatsVsLinkedList.TestBenchmark2.LinkedList                         avgt    4   63.207 ±   0.581  us/op
 */
 
 public class QueueStatsVsLinkedList
 {
     @Fork(value = 1)
-    @Warmup(iterations = 5)
-    @Measurement(iterations = 4)
-    @OutputTimeUnit(TimeUnit.MILLISECONDS)
+    @Warmup(iterations = 5, time = 5)
+    @Measurement(iterations = 4, time = 5)
+    @OutputTimeUnit(TimeUnit.MICROSECONDS)
     @BenchmarkMode({Mode.AverageTime})
     @State(Scope.Benchmark)
     @Timeout(time = 120)
     public static class TestBenchmark2
     {
         @Benchmark
-        public void AStatsQueueLinkedListDisabledSync(QueueConfiguration2 queueConfiguration)
-        {
-            queueConfiguration.statsQueueLinkedListDisabledSyncBenchmark.get();
-        }
-
-        @Benchmark
         public void AStatsQueueLinkedList(QueueConfiguration2 queueConfiguration)
         {
             queueConfiguration.statsQueueLinkedListBenchmark.get();
+        }
+
+        @Benchmark
+        public void AStatsQueueLinkedListDisabledSync(QueueConfiguration2 queueConfiguration)
+        {
+            queueConfiguration.statsQueueLinkedListDisabledSyncBenchmark.get();
         }
 
         @Benchmark
@@ -84,7 +84,8 @@ public class QueueStatsVsLinkedList
                 var queueConfiguration = QueueConfiguration.builder()
                         .path(randomPath())
                         .preTouch(true)
-                        .mmapSize(Integer.MAX_VALUE)
+                        .mmapSize(4L << 30)
+                        .batchSize(20000)
                         .disableSynchronization(true)
                         .build();
 
@@ -121,10 +122,10 @@ public class QueueStatsVsLinkedList
             {
                 return () ->
                 {
-                    for (int i = 0; i < 10_000; i++)
+                    for (int i = 0; i < 5_000; i++)
                         queue.add(i);
 
-                    for (int i = 0; i < 10_000; i++)
+                    for (int i = 0; i < 5_000; i++)
                         queue.poll();
 
                     return null;
