@@ -37,7 +37,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     boolean disableSync;
     StateUpdater stateUpdater;
 
-    FlushThreshold flushThreshold;
+    WriteThreshold writeThreshold;
     Adder dropped;
     @NonFinal
     long nextWriteTimestamp;
@@ -83,7 +83,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
             this.appenderThread = Thread.currentThread();
             this.probeWriter = queueConfiguration.getProbeAccess();
             this.internalFileAccess = queueConfiguration.getInternalFileAccess();
-            this.flushThreshold = queueConfiguration.getFlushThreshold();
+            this.writeThreshold = queueConfiguration.getWriteThreshold();
             this.nextWriteTimestamp = time();
             this.dropped = queueConfiguration.isCountDropped() ? newAdder() : null;
             this.adder = newAdder();
@@ -287,7 +287,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
             try
             {
                 write(time, appender, false);
-                nextWriteTimestamp = time + flushThreshold.getDelayBetweenWritesMillis();
+                nextWriteTimestamp = time + writeThreshold.getDelayBetweenWritesMillis();
                 stateUpdater.intoFree();
             } catch (Exception e)
             {
@@ -307,7 +307,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
 
     private boolean messagesNotComesTooFast(int difference, long time)
     {
-        return time >= nextWriteTimestamp || difference >= flushThreshold.getMinSizeDifference();
+        return time >= nextWriteTimestamp || difference >= writeThreshold.getMinSizeDifference();
     }
 
     private void write(long time, ExcerptAppender appender, boolean flush)

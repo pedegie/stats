@@ -39,7 +39,7 @@ class CountProbesTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .batchSize(1)
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
 
             TestTailer testTailer = new TestTailer()
@@ -73,7 +73,7 @@ class CountProbesTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .batchSize(1)
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
 
             TestTailer testTailer = new TestTailer()

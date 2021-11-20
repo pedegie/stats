@@ -29,7 +29,7 @@ class BatchingTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .batchSize(writeBatchSize)
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
 
             TestTailer testTailer = new TestTailer()
@@ -88,7 +88,7 @@ class BatchingTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .batchSize(batchSize)
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
         when:
             TestQueueUtil.createQueue(queueConfiguration)
@@ -123,7 +123,7 @@ class BatchingTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .batchSize(writeBatchSize)
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
 
             TestTailer testTailer = new TestTailer()
@@ -180,7 +180,7 @@ class BatchingTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .batchSize(writeBatchSize)
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
 
             TestTailer testTailer = new TestTailer()

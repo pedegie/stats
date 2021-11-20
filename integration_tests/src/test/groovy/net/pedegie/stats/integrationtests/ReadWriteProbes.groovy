@@ -3,7 +3,7 @@ package net.pedegie.stats.integrationtests
 import net.openhft.chronicle.core.OS
 import net.pedegie.stats.api.queue.BusyWaiter
 import net.pedegie.stats.api.queue.FileUtils
-import net.pedegie.stats.api.queue.FlushThreshold
+import net.pedegie.stats.api.queue.WriteThreshold
 import net.pedegie.stats.api.queue.QueueConfiguration
 import net.pedegie.stats.api.queue.StatsQueue
 import net.pedegie.stats.api.queue.probe.Probe
@@ -55,7 +55,7 @@ class ReadWriteProbes extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(PATH)
                     .batchSize(1)
-                    .flushThreshold(FlushThreshold.of(0, 1))
+                    .writeThreshold(WriteThreshold.of(0, 1))
                     .mmapSize(OS.pageSize())
                     .build()
 
@@ -87,7 +87,7 @@ class ReadWriteProbes extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(PATH)
                     .batchSize(1)
-                    .flushThreshold(FlushThreshold.of(0, 1))
+                    .writeThreshold(WriteThreshold.of(0, 1))
                     .mmapSize(OS.pageSize())
                     .build()
 

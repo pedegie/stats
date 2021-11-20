@@ -37,7 +37,7 @@ public class QueueConfiguration
     @Builder.Default
     InternalFileAccess internalFileAccess = InternalFileAccess.INSTANCE;
     @Builder.Default
-    FlushThreshold flushThreshold = FlushThreshold.defaultThreshold();
+    WriteThreshold writeThreshold = WriteThreshold.defaultThreshold();
     @Builder.Default
     boolean countDropped = false;
     @Builder.Default

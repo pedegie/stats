@@ -40,7 +40,7 @@ class ClosingQueueTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .batchSize(1)
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when:
@@ -63,7 +63,7 @@ class ClosingQueueTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .batchSize(1)
                     .mmapSize(OS.pageSize())
-                    .flushThreshold(FlushThreshold.of(5000, 2))
+                    .writeThreshold(WriteThreshold.of(5000, 2))
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put 4 elements, one by one"

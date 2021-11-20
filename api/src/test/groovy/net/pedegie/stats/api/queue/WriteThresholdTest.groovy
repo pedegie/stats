@@ -7,7 +7,7 @@ import spock.lang.Specification
 
 import java.nio.file.Path
 
-class FlushThresholdTest extends Specification
+class WriteThresholdTest extends Specification
 {
     def setup()
     {
@@ -26,7 +26,7 @@ class FlushThresholdTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .batchSize(1)
-                    .flushThreshold(FlushThreshold.of(10, 2))
+                    .writeThreshold(WriteThreshold.of(10, 2))
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put there 3 elements one by one instantly"
@@ -50,7 +50,7 @@ class FlushThresholdTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .batchSize(1)
                     .mmapSize(OS.pageSize())
-                    .flushThreshold(FlushThreshold.minSizeDifference(2))
+                    .writeThreshold(WriteThreshold.minSizeDifference(2))
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put there 3 elements, one by one"

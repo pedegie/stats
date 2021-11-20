@@ -28,7 +28,7 @@ class ErrorHandlerTest extends Specification
             FileAccessErrorHandler errorHandler = Mock(FileAccessErrorHandler)
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .disableCompression(true)
                     .probeAccess(new ProbeAccess() {
                         int written = 0
@@ -91,7 +91,7 @@ class ErrorHandlerTest extends Specification
                     .batchSize(1)
                     .disableCompression(true)
                     .mmapSize(OS.pageSize())
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .probeAccess(new ProbeAccess() {
                         int written = 0
 
@@ -135,7 +135,7 @@ class ErrorHandlerTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .disableCompression(true)
                     .batchSize(1)
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .mmapSize(OS.pageSize())
                     .probeAccess(new ProbeAccess() {
                         int written = 0

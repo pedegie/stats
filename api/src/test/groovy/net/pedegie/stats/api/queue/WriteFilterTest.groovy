@@ -26,7 +26,7 @@ class WriteFilterTest extends Specification
                     .batchSize(1)
                     .disableCompression(true)
                     .writeFilter(WriteFilter.acceptWhenSizeHigherThan(3))
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we add 4 elements"
@@ -49,7 +49,7 @@ class WriteFilterTest extends Specification
                     .mmapSize(OS.pageSize())
                     .disableCompression(true)
                     .batchSize(1)
-                    .flushThreshold(FlushThreshold.flushOnEachWrite())
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we add 4 elements"
