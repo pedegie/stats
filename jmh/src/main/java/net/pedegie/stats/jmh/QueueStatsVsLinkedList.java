@@ -30,10 +30,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /*
-Benchmark                                                    Mode  Cnt   Score   Error  Units
-QueueStatsVsLinkedList.TestBenchmark2.AStatsQueueLinkedList              avgt    4  502.038 ± 115.764  us/op
-QueueStatsVsLinkedList.TestBenchmark2.AStatsQueueLinkedListDisabledSync  avgt    4  380.309 ± 100.996  us/op
-QueueStatsVsLinkedList.TestBenchmark2.LinkedList                         avgt    4   63.207 ±   0.581  us/op
+Benchmark                                                                Mode  Cnt    Score     Error  Units
+QueueStatsVsLinkedList.TestBenchmark2.AStatsQueueLinkedList              avgt    4  487.371 ±  29.007  us/op
+QueueStatsVsLinkedList.TestBenchmark2.AStatsQueueLinkedListDisabledSync  avgt    4  372.918 ± 121.043  us/op
+QueueStatsVsLinkedList.TestBenchmark2.LinkedList                         avgt    4   62.174 ±   0.161  us/op
 */
 
 public class QueueStatsVsLinkedList
