@@ -15,7 +15,7 @@ public interface ProbeAccess
         return DefaultProbeAccess.INSTANCE;
     }
 
-    default void batchWrite(Bytes<?> bytes, Bytes batchBytes)
+    default void batchWrite(Bytes<?> bytes, Bytes<?> batchBytes)
     {
         bytes.write(batchBytes);
     }

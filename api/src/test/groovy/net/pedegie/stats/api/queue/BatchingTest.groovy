@@ -214,4 +214,53 @@ class BatchingTest extends Specification
         cleanup:
             queue.close()
     }
+
+    def "batched probes should be flushed on flush"()
+    {
+        given:
+            int writeBatchSize = 4
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
+                    .batchSize(writeBatchSize)
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
+                    .build()
+
+            TestTailer testTailer = new TestTailer()
+            TailerConfiguration tailerConfiguration = TailerConfiguration.builder()
+                    .tailer(testTailer)
+                    .path(TestQueueUtil.PATH)
+                    .build()
+
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
+            ProbeTailer probeTailer = ProbeTailer.from(tailerConfiguration)
+        when: "half of batch added"
+            queue.add(5)
+            queue.add(5)
+        then: "probe tailer doesn't see anything yet"
+            probeTailer.probes() == 0
+        when: "flush"
+            queue.batchFlush()
+            probeTailer.read()
+        then: "tailer see half of batch probes already"
+            probeTailer.probes() == 0
+            testTailer.probes.size() == 2
+        when: "add 3 more probes, still one is missing to full batch, ignoring previous 2 probes because they were read already"
+            queue.add(5)
+            queue.add(5)
+            queue.add(5)
+        then: "tailer doesn't see any probes yet"
+            probeTailer.probes() == 0
+        when: "add last part of batch"
+            queue.add(5)
+        then: "tailer see probes"
+            probeTailer.probes() == 4
+        when:
+            probeTailer.read()
+        then:
+            probeTailer.probes() == 0
+            testTailer.probes.size() == 6
+        cleanup:
+            queue.close()
+    }
 }

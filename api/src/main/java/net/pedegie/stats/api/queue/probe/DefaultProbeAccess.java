@@ -23,7 +23,7 @@ class DefaultProbeAccess implements ProbeAccess
     }
 
     @Override
-    public void batchWrite(Bytes<?> bytes, Bytes batchBytes)
+    public void batchWrite(Bytes<?> bytes, Bytes<?> batchBytes)
     {
         bytes.write(batchBytes);
     }

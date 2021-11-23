@@ -3,9 +3,9 @@ package net.pedegie.stats.integrationtests
 import net.openhft.chronicle.core.OS
 import net.pedegie.stats.api.queue.BusyWaiter
 import net.pedegie.stats.api.queue.FileUtils
-import net.pedegie.stats.api.queue.WriteThreshold
 import net.pedegie.stats.api.queue.QueueConfiguration
 import net.pedegie.stats.api.queue.StatsQueue
+import net.pedegie.stats.api.queue.WriteThreshold
 import net.pedegie.stats.api.queue.probe.Probe
 import net.pedegie.stats.api.tailer.ProbeTailer
 import net.pedegie.stats.api.tailer.ProbeTailerScheduler
@@ -210,7 +210,7 @@ class ReadWriteProbes extends Specification
             boolean allRead = BusyWaiter.busyWait({
                 long read = tailer1.probesRead + tailer2.probesRead + statsQueue1.dropped + statsQueue2.dropped
                 read == requiredAmountOfReadElements
-            }, 5, "waiting for tailers read")
+            }, 5000, "waiting for tailers read")
 
             scheduler.close()
             pool.shutdown()
