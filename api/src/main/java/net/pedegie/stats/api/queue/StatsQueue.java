@@ -319,11 +319,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
 
             if (batchBytes.realCapacity() - batchBytes.writePosition() == 0 || flush)
             {
-                try (DocumentContext dc = appender.writingDocument())
-                {
-                    probeWriter.batchWrite(dc.wire().bytes(), batchBytes);
-                }
-                batchBytes.clear();
+                flush(appender);
             }
         } else if (countDropped())
         {
@@ -340,7 +336,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
             {
                 if (firstClose)
                 {
-                    flush();
+                    writeFlush();
                     batchBytes.releaseLast();
                     firstClose = false;
                 }
@@ -354,6 +350,31 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         }
     }
 
+    public boolean batchFlush()
+    {
+        if (stateUpdater.intoBusy())
+        {
+            try
+            {
+                flush(appender);
+            } finally
+            {
+                stateUpdater.intoFree();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private void flush(ExcerptAppender appender)
+    {
+        try (DocumentContext dc = appender.writingDocument())
+        {
+            probeWriter.batchWrite(dc.wire().bytes(), batchBytes);
+            batchBytes.clear();
+        }
+    }
+
     public long getDropped()
     {
         return countDropped() ? dropped.sum() : -1;
@@ -364,7 +385,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         return dropped != null;
     }
 
-    private void flush()
+    private void writeFlush()
     {
         write(time(), acquireAppender(), true);
     }

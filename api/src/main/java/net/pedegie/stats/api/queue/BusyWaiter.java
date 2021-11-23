@@ -3,32 +3,34 @@ package net.pedegie.stats.api.queue;
 import lombok.extern.slf4j.Slf4j;
 import net.openhft.chronicle.core.Jvm;
 
+import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
 @Slf4j
 public class BusyWaiter
 {
-    public static boolean busyWait(BooleanSupplier condition, int maxWaitSeconds, String conditionDescription)
+    public static boolean busyWait(BooleanSupplier condition, int maxWaitMillis, String conditionDescription)
     {
         double waits = 0;
-        int seconds = 1;
+        long maxWaitNanos = TimeUnit.MILLISECONDS.toNanos(maxWaitMillis);
 
         while (!Thread.currentThread().isInterrupted() && !condition.getAsBoolean())
         {
             busyWait(1e3);
             waits += 1e3;
 
-            if (waits >= 1e9)
+            if (waits >= maxWaitNanos)
             {
-                log.warn("Busy wait exceeds {} seconds for {}", seconds++, conditionDescription);
-                if (seconds >= maxWaitSeconds)
-                {
-                    return false;
-                }
-                waits = 0;
+                log.warn("Busy wait exceeds {} millis for {}", maxWaitMillis, conditionDescription);
+                return false;
             }
         }
         return true;
+    }
+
+    public static void busyWait(long millis)
+    {
+        busyWait(millis * 1e6);
     }
 
     private static void busyWait(double nanos)

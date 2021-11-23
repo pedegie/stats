@@ -62,7 +62,7 @@ class PrometheusTest extends Specification
         when:
             scheduler.addTailer(probeTailer1)
             scheduler.addTailer(probeTailer2)
-            BusyWaiter.busyWait({ prometheusTailer.collected }, 15, "waiting for incoming prometheus request")
+            BusyWaiter.busyWait({ prometheusTailer.collected }, 15000, "waiting for incoming prometheus request")
 
             HttpClient httpClient = HttpClient.newHttpClient()
 
