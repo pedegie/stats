@@ -131,21 +131,22 @@ class Flusher implements Runnable
 
     private boolean flush(TimestampedFlushable flushable, long nextFlushTimestamp)
     {
-        for (int i = 0; i < flushMaxTries && notFlushedInMeanwhile(flushable, nextFlushTimestamp); i++)
+        for (int i = 0; i < flushMaxTries; i++)
         {
-            if (flushable.batchFlushable.batchFlush())
-            {
+            if (flushedInMeanwhile(flushable, nextFlushTimestamp))
                 return true;
-            }
+
+            if (flushable.batchFlushable.batchFlush())
+                return true;
 
             BusyWaiter.busyWait(1);
         }
         return false;
     }
 
-    private boolean notFlushedInMeanwhile(TimestampedFlushable flushable, long nextFlushTimestamp)
+    private boolean flushedInMeanwhile(TimestampedFlushable flushable, long nextFlushTimestamp)
     {
-        return flushable.calculateNextFlushTimestamp() == nextFlushTimestamp;
+        return flushable.calculateNextFlushTimestamp() != nextFlushTimestamp;
     }
 
     private boolean waitForFlushable()
