@@ -1,6 +1,7 @@
 package net.pedegie.stats.api.tailer
 
 import net.openhft.chronicle.core.OS
+import net.pedegie.stats.api.queue.Batching
 import net.pedegie.stats.api.queue.FileUtils
 import net.pedegie.stats.api.queue.QueueConfiguration
 import net.pedegie.stats.api.queue.StatsQueue
@@ -14,6 +15,7 @@ class ProbeTailerTest extends Specification
 {
     def setup()
     {
+        StatsQueue.stopFlusher()
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
@@ -368,7 +370,7 @@ class ProbeTailerTest extends Specification
     {
         QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                 .path(path)
-                .batchSize(1)
+                .batching(new Batching(1))
                 .mmapSize(OS.pageSize())
                 .build()
         StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)

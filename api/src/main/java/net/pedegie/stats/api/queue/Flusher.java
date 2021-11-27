@@ -75,8 +75,8 @@ class Flusher implements Runnable
 
     public void stop()
     {
-        isRunning.set(false);
-        flusherThread.interrupt();
+        if (isRunning.getAndSet(false))
+            flusherThread.interrupt();
     }
 
     @Override
@@ -102,7 +102,6 @@ class Flusher implements Runnable
             var currentTime = System.currentTimeMillis();
             var nextFlushTimestamp = flushable.calculateNextFlushTimestamp();
             var waitMillis = nextFlushTimestamp - currentTime;
-
             if (waitMillis > busyWaitMillisBound)
             {
                 boolean interrupted = sleep(waitMillis);

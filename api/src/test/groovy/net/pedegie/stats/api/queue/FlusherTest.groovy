@@ -7,6 +7,11 @@ import java.util.concurrent.TimeUnit
 class FlusherTest extends Specification
 {
 
+    def setup()
+    {
+        StatsQueue.stopFlusher()
+    }
+
     def "should correctly close flusher, when stop command is invoked during waiting on new flushable"()
     {
         given:

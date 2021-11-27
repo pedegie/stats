@@ -7,6 +7,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import net.openhft.chronicle.bytes.Bytes;
+import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.queue.ExcerptAppender;
 import net.openhft.chronicle.queue.impl.single.Pretoucher;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
@@ -25,9 +26,11 @@ import static net.pedegie.stats.api.queue.probe.ProbeHolder.PROBE_SIZE;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PROTECTED)
 @Slf4j
-public class StatsQueue<T> implements Queue<T>, Closeable
+public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
 {
     private static final ConcurrentHashMap<String, Boolean> queues = new ConcurrentHashMap<>();
+    private static final Flusher flusher = new Flusher();
+
     Queue<T> queue;
     WriteFilter writeFilter;
     SingleChronicleQueue chronicleQueue;
@@ -36,11 +39,17 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     InternalFileAccess internalFileAccess;
     boolean disableSync;
     StateUpdater stateUpdater;
+    long batchFlushIntervalMillis;
 
     WriteThreshold writeThreshold;
     Adder dropped;
     @NonFinal
     long nextWriteTimestamp;
+    @NonFinal
+    volatile long lastBatchFlushTimestamp;
+    @NonFinal
+    boolean flushing;
+
     ProbeAccess probeWriter;
 
     @NonFinal
@@ -88,7 +97,10 @@ public class StatsQueue<T> implements Queue<T>, Closeable
             this.dropped = queueConfiguration.isCountDropped() ? newAdder() : null;
             this.adder = newAdder();
             this.stateUpdater = disableSync ? Synchronizer.NON_SYNCHRONIZED.newStateUpdater() : Synchronizer.CONCURRENT.newStateUpdater();
-            this.batchBytes = Bytes.allocateDirect((long) queueConfiguration.getBatchSize() * PROBE_SIZE);
+            this.batchFlushIntervalMillis = queueConfiguration.getBatching().getFlushMillisThreshold();
+            this.batchBytes = Bytes.allocateDirect((long) queueConfiguration.getBatching().getBatchSize() * PROBE_SIZE);
+            flusher.start();
+            flusher.addFlushable(this);
         } catch (Exception e)
         {
             queues.remove(queueConfiguration.getPath().toString());
@@ -281,27 +293,55 @@ public class StatsQueue<T> implements Queue<T>, Closeable
 
     private void write(int difference)
     {
+        write(difference, 1);
+    }
+
+    private void write(int difference, int tries)
+    {
         var time = time();
-        if (messagesNotComesTooFast(difference, time) && stateUpdater.intoBusy())
+        if (messagesNotComesTooFast(difference, time))
         {
-            try
+            if (stateUpdater.intoBusy())
             {
-                write(time, appender, false);
-                nextWriteTimestamp = time + writeThreshold.getDelayBetweenWritesMillis();
-                stateUpdater.intoFree();
-            } catch (Exception e)
-            {
-                if (accessErrorHandler.onError(e))
+                try
                 {
-                    close();
-                } else
-                {
+                    write(time, appender, false);
+                    nextWriteTimestamp = time + writeThreshold.getDelayBetweenWritesMillis();
                     stateUpdater.intoFree();
+                } catch (Exception e)
+                {
+                    if (accessErrorHandler.onError(e))
+                        close();
+                    else
+                        stateUpdater.intoFree();
                 }
+            } else if (flushing)
+            {
+                tryAgain(difference, tries);
+            } else if (countDropped())
+            {
+                dropped.increment();
             }
         } else if (countDropped())
         {
             dropped.increment();
+        }
+    }
+
+    private void tryAgain(int difference, int tries)
+    {
+        if (tries == 5)
+        {
+            log.warn("Cannot write to queue after {} tries because of batch flusher still takes precedence. " +
+                    "Probe is dropped. Consider to increase 'QueueConfiguration.flushMillisThreshold' parameter " +
+                    "to allow normal writing to queue.", tries);
+
+            if (countDropped())
+                dropped.increment();
+        } else
+        {
+            Jvm.safepoint();
+            write(difference, tries + 1);
         }
     }
 
@@ -319,7 +359,7 @@ public class StatsQueue<T> implements Queue<T>, Closeable
 
             if (batchBytes.realCapacity() - batchBytes.writePosition() == 0 || flush)
             {
-                flush(appender);
+                flush(appender, time);
             }
         } else if (countDropped())
         {
@@ -354,11 +394,19 @@ public class StatsQueue<T> implements Queue<T>, Closeable
     {
         if (stateUpdater.intoBusy())
         {
+            flushing = true;
             try
             {
-                flush(appender);
+                if (batchBytes.writePosition() == 0)
+                {
+                    lastBatchFlushTimestamp = time();
+                    return true;
+                }
+
+                flush(appender, time());
             } finally
             {
+                flushing = false;
                 stateUpdater.intoFree();
             }
             return true;
@@ -366,12 +414,36 @@ public class StatsQueue<T> implements Queue<T>, Closeable
         return false;
     }
 
-    private void flush(ExcerptAppender appender)
+    @Override
+    public long flushIntervalMillis()
+    {
+        return batchFlushIntervalMillis;
+    }
+
+    @Override
+    public long lastBatchFlushTimestamp()
+    {
+        return lastBatchFlushTimestamp;
+    }
+
+    @Override
+    public boolean isClosed()
+    {
+        return !firstClose;
+    }
+
+    static void stopFlusher()
+    {
+        flusher.stop();
+    }
+
+    private void flush(ExcerptAppender appender, long flushTimestamp)
     {
         try (DocumentContext dc = appender.writingDocument())
         {
             probeWriter.batchWrite(dc.wire().bytes(), batchBytes);
             batchBytes.clear();
+            lastBatchFlushTimestamp = flushTimestamp;
         }
     }
 

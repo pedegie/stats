@@ -11,19 +11,20 @@ public class BusyWaiter
 {
     public static boolean busyWait(BooleanSupplier condition, int maxWaitMillis, String conditionDescription)
     {
-        double waits = 0;
         long maxWaitNanos = TimeUnit.MILLISECONDS.toNanos(maxWaitMillis);
 
-        while (!Thread.currentThread().isInterrupted() && !condition.getAsBoolean())
+        long elapsed = 0;
+        var start = System.nanoTime();
+        while (!(Thread.currentThread().isInterrupted() || condition.getAsBoolean()))
         {
-            busyWait(1e3);
-            waits += 1e3;
-
-            if (waits >= maxWaitNanos)
+            if (elapsed >= maxWaitNanos)
             {
                 log.warn("Busy wait exceeds {} millis for {}", maxWaitMillis, conditionDescription);
                 return false;
             }
+            elapsed = System.nanoTime() - start;
+            Jvm.safepoint();
+
         }
         return true;
     }

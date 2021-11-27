@@ -41,5 +41,5 @@ public class QueueConfiguration
     @Builder.Default
     boolean countDropped = false;
     @Builder.Default
-    int batchSize = 50;
+    Batching batching = Batching.defaultConfiguration();
 }

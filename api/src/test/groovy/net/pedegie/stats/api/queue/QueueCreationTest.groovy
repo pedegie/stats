@@ -9,6 +9,7 @@ class QueueCreationTest extends Specification
 {
     def setup()
     {
+        StatsQueue.stopFlusher()
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
@@ -56,7 +57,20 @@ class QueueCreationTest extends Specification
         given:
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
-                    .batchSize(0)
+                    .batching(new Batching(0))
+                    .build()
+        when:
+            TestQueueUtil.createQueue(queueConfiguration)
+        then:
+            thrown(IllegalArgumentException)
+    }
+
+    def "should throw an exception when flushMillisThreshold is less than 10"()
+    {
+        given:
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .batching(new Batching(1, 9))
                     .build()
         when:
             TestQueueUtil.createQueue(queueConfiguration)
