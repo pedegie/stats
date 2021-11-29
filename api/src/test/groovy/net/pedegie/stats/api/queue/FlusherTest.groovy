@@ -103,11 +103,12 @@ class FlusherTest extends Specification
             flusher.addFlushable(flushable1)
             flusher.addFlushable(flushable2)
             flusher.addFlushable(flushable3)
+            boolean finishedInTme = BusyWaiter.busyWait({ flushable1.flushedTimes == 10 && flushable2.flushedTimes == 3 && flushable3.flushedTimes == 1 }, 1150, "waiting for flushables")
         then:
-            BusyWaiter.busyWait({ flushable1.flushedTimes == 10 && flushable2.flushedTimes == 3 && flushable3.flushedTimes == 1 }, 1150, "waiting for flushables")
             flushable1.flushedTimes < 12
             flushable2.flushedTimes == 3
             flushable3.flushedTimes == 1
+            finishedInTme
         cleanup:
             flusher.stop()
     }
