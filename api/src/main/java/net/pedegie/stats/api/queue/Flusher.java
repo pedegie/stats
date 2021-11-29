@@ -56,7 +56,6 @@ class Flusher implements Runnable
             unpause();
         } while (isRunning.get() && !newFlushable.compareAndSet(null, timestampedFlushable));
 
-
     }
 
     public boolean start()
