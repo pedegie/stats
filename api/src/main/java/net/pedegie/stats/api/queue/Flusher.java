@@ -8,57 +8,53 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @Slf4j
 class Flusher implements Runnable
 {
-    private static final int BUSY_WAIT_MILLIS_BOUND = 50;
+    private static final int ACCEPT_FLUSHABLE_MOD_COUNT = 32;
     private static final int FLUSH_MAX_TRIES = 3;
-
-    int busyWaitMillisBound;
     int flushMaxTries;
 
     @NonFinal
     volatile Thread flusherThread;
 
     AtomicBoolean isRunning = new AtomicBoolean();
-    Lock lock = new ReentrantLock();
-    Condition notEmpty = lock.newCondition();
-
     PriorityQueue<TimestampedFlushable> flushables = new PriorityQueue<>(Comparator.comparing(s -> s.flushTimestamp));
+    AtomicReference<TimestampedFlushable> newFlushable = new AtomicReference<>();
+    AtomicBoolean pausing = new AtomicBoolean();
 
     public Flusher()
     {
-        this(BUSY_WAIT_MILLIS_BOUND, FLUSH_MAX_TRIES);
+        this(FLUSH_MAX_TRIES);
     }
 
-    public Flusher(int busyWaitMillisBound, int flushMaxTries)
+    public Flusher(int flushMaxTries)
     {
-        if (busyWaitMillisBound < 0 || flushMaxTries < 1)
+        if (flushMaxTries < 1)
             throw new IllegalArgumentException("Incorrect flusher values. " +
-                    "busyWaitMillisBound [ " + busyWaitMillisBound + " ] cannot be less than 0, " +
                     "flushMaxTries [ " + flushMaxTries + " ] cannot be less than 1");
 
-        this.busyWaitMillisBound = busyWaitMillisBound;
         this.flushMaxTries = flushMaxTries;
     }
 
     public void addFlushable(BatchFlushable flushable)
     {
-        lock.lock();
-        try
+        TimestampedFlushable timestampedFlushable = new TimestampedFlushable(flushable);
+        if (flusherThread == null || flusherThread == Thread.currentThread())
         {
-            flushables.add(new TimestampedFlushable(flushable));
-            if (flushables.size() == 1)
-                notEmpty.signal();
-        } finally
-        {
-            lock.unlock();
+            flushables.add(timestampedFlushable);
+            return;
         }
+
+        do
+        {
+            unpause();
+        } while (isRunning.get() && !newFlushable.compareAndSet(null, timestampedFlushable));
+
     }
 
     public boolean start()
@@ -69,32 +65,35 @@ class Flusher implements Runnable
         assert flusherThread == null || !flusherThread.isAlive();
 
         flusherThread = new Thread(this, "stats-flusher");
+        flusherThread.setDaemon(true);
         flusherThread.start();
         return true;
     }
 
     public void stop()
     {
-        if (isRunning.getAndSet(false))
-            flusherThread.interrupt();
+        isRunning.set(false);
+        if (flusherThread != null)
+        {
+            LockSupport.unpark(flusherThread);
+            BusyWaiter.busyWait(() -> !flusherThread.isAlive(), 5000, "waiting for flusher termination");
+        }
     }
 
     @Override
     public void run()
     {
+        int acceptFlushableModCount = ACCEPT_FLUSHABLE_MOD_COUNT;
+
         while (isRunning.get())
         {
-            var flushable = flushables.poll();
-            if (flushable == null)
-            {
-                boolean interrupted = waitForFlushable();
-                if (interrupted)
-                {
-                    stop();
-                    break;
-                }
-                flushable = flushables.poll();
-            }
+            TimestampedFlushable flushable = flushables.poll();
+
+            if (flushable == null && !acceptNewFlushable())
+                pause();
+
+            if (flushable == null) // spurious wakeup or closing flusher, continue to make decision
+                continue;
 
             if (flushable.batchFlushable.isClosed())
                 continue;
@@ -102,19 +101,14 @@ class Flusher implements Runnable
             var currentTime = System.currentTimeMillis();
             var nextFlushTimestamp = flushable.calculateNextFlushTimestamp();
             var waitMillis = nextFlushTimestamp - currentTime;
-            if (waitMillis > busyWaitMillisBound)
-            {
-                boolean interrupted = sleep(waitMillis);
-                if (interrupted)
-                {
-                    stop();
-                    break;
-                }
 
-            } else if (waitMillis > 0)
+            if (waitMillis > 1 || --acceptFlushableModCount <= 0)
             {
-                BusyWaiter.busyWait(waitMillis);
+                acceptFlushableModCount = ACCEPT_FLUSHABLE_MOD_COUNT;
+                acceptNewFlushable();
             }
+
+            pause(waitMillis);
 
             boolean flushed = flush(flushable, nextFlushTimestamp);
             if (flushed)
@@ -148,33 +142,39 @@ class Flusher implements Runnable
         return flushable.calculateNextFlushTimestamp() != nextFlushTimestamp;
     }
 
-    private boolean waitForFlushable()
+    private void pause()
     {
-        lock.lock();
-        try
-        {
-            while (flushables.isEmpty())
-                notEmpty.await();
-        } catch (InterruptedException e)
-        {
-            return true;
-        } finally
-        {
-            lock.unlock();
-        }
-        return false;
+        pausing.set(true);
+        LockSupport.park();
+        pausing.set(false);
     }
 
-    private boolean sleep(long millis)
+    private void pause(long millis)
     {
-        try
-        {
-            Thread.sleep(millis);
-        } catch (InterruptedException e)
-        {
-            return true;
-        }
-        return false;
+        if (millis < 1)
+            return;
+
+        pausing.set(true);
+        if (!Thread.currentThread().isInterrupted())
+            LockSupport.parkNanos(millis * 1_000_000);
+        pausing.set(false);
+    }
+
+    private void unpause()
+    {
+        Thread thread = this.flusherThread;
+        if (thread != null && pausing.get())
+            LockSupport.unpark(thread);
+    }
+
+    private boolean acceptNewFlushable()
+    {
+        TimestampedFlushable flushable = newFlushable.getAndSet(null);
+        if (flushable == null)
+            return false;
+
+        flushables.add(flushable);
+        return true;
     }
 
     private static class TimestampedFlushable

@@ -432,7 +432,7 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
         return !firstClose;
     }
 
-    static void stopFlusher()
+    public static void stopFlusher()
     {
         flusher.stop();
     }

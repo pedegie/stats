@@ -6,12 +6,6 @@ import java.util.concurrent.TimeUnit
 
 class FlusherTest extends Specification
 {
-
-    def setup()
-    {
-        StatsQueue.stopFlusher()
-    }
-
     def "should correctly close flusher, when stop command is invoked during waiting on new flushable"()
     {
         given:
@@ -22,6 +16,8 @@ class FlusherTest extends Specification
             flusher.stop()
         then:
             BusyWaiter.busyWait({ flusher.flusherThread.state == Thread.State.TERMINATED }, 3000, "waiting for flusher thread termination")
+        cleanup:
+            flusher.stop()
     }
 
     def "running flusher more than once, should has no effect"()
@@ -39,6 +35,8 @@ class FlusherTest extends Specification
             started &= flusher.start()
         then:
             !started
+        cleanup:
+            flusher.stop()
     }
 
     def "stopping flusher more than once, should has no effect"()
@@ -53,6 +51,8 @@ class FlusherTest extends Specification
             flusher.stop()
         then:
             noExceptionThrown()
+        cleanup:
+            flusher.stop()
     }
 
     def "should be able to start, then stop, then start again flusher"()
@@ -67,6 +67,8 @@ class FlusherTest extends Specification
             flusher.start()
         then:
             1 == 1
+        cleanup:
+            flusher.stop()
     }
 
     def "should remove flushables when they become closed"()
@@ -85,12 +87,14 @@ class FlusherTest extends Specification
         then:
             flushables == 2 // it may be 2 or only 1 if one is currently processing
             BusyWaiter.busyWait({ flusher.flushables.size() == 0 }, 300, "waiting for removing flushables")
+        cleanup:
+            flusher.stop()
     }
 
     def "should flush flushables within given interval"()
     {
         given:
-            Flusher flusher = new Flusher(100, 1)
+            Flusher flusher = new Flusher(1)
             flusher.start()
             TestFlushable flushable1 = new TestFlushable(100)
             TestFlushable flushable2 = new TestFlushable(300)
@@ -104,12 +108,14 @@ class FlusherTest extends Specification
             flushable1.flushedTimes < 12
             flushable2.flushedTimes == 3
             flushable3.flushedTimes == 1
+        cleanup:
+            flusher.stop()
     }
 
     def "should try to flush n times and then postpone flush to next interval"()
     {
         given:
-            Flusher flusher = new Flusher(100, 3)
+            Flusher flusher = new Flusher(3)
             TestFlushable flushable = new TestFlushable(100, 4)
             flusher.start()
             long start = System.nanoTime()
@@ -119,22 +125,20 @@ class FlusherTest extends Specification
         then:
             flushed
             TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) > 190
+        cleanup:
+            flusher.stop()
     }
 
     def "should throw an exception if passed parameters are less than min values"()
     {
         given:
-            int waitBound = busyWaitMillisBound
             int maxTries = flushMaxTries
         when:
-            new Flusher(waitBound, maxTries)
+            new Flusher(maxTries)
         then:
             thrown(IllegalArgumentException)
         where:
-            busyWaitMillisBound | flushMaxTries
-            1                   | 0
-            -1                  | 1
-            -1                  | 0
+            flushMaxTries << [0, -1]
     }
 
     private static class TestFlushable implements BatchFlushable
