@@ -3,7 +3,6 @@ package net.pedegie.stats.api.queue;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.Comparator;
 import java.util.PriorityQueue;
@@ -12,7 +11,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
-@Slf4j
 class Flusher implements Runnable
 {
     private static final int ACCEPT_FLUSHABLE_MOD_COUNT = 32;
@@ -26,6 +24,8 @@ class Flusher implements Runnable
     PriorityQueue<TimestampedFlushable> flushables = new PriorityQueue<>(Comparator.comparing(s -> s.flushTimestamp));
     AtomicReference<TimestampedFlushable> newFlushable = new AtomicReference<>();
     AtomicBoolean pausing = new AtomicBoolean();
+    @NonFinal
+    boolean newHandler;
 
     public Flusher()
     {
@@ -52,8 +52,10 @@ class Flusher implements Runnable
 
         do
         {
+            newHandler = true;
             unpause();
         } while (isRunning.get() && !newFlushable.compareAndSet(null, timestampedFlushable));
+
 
     }
 
@@ -105,10 +107,18 @@ class Flusher implements Runnable
             if (waitMillis > 1 || --acceptFlushableModCount <= 0)
             {
                 acceptFlushableModCount = ACCEPT_FLUSHABLE_MOD_COUNT;
-                acceptNewFlushable();
+                if (newFlushable(flushable))
+                    continue;
             }
 
             pause(waitMillis);
+
+            if (newHandler)
+            {
+                newHandler = false;
+                if (newFlushable(flushable))
+                    continue;
+            }
 
             boolean flushed = flush(flushable, nextFlushTimestamp);
             if (flushed)
@@ -120,6 +130,16 @@ class Flusher implements Runnable
         }
 
         flushables.clear();
+    }
+
+    private boolean newFlushable(TimestampedFlushable flushable)
+    {
+        if (acceptNewFlushable())
+        {
+            flushables.add(flushable);
+            return true;
+        }
+        return false;
     }
 
     private boolean flush(TimestampedFlushable flushable, long nextFlushTimestamp)

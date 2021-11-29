@@ -113,6 +113,25 @@ class FlusherTest extends Specification
             flusher.stop()
     }
 
+    def "adding flusher with less interval, than currently processing, should takes precedence"()
+    {
+        given:
+            Flusher flusher = new Flusher(1)
+            flusher.start()
+            TestFlushable flushable1 = new TestFlushable(1000)
+            TestFlushable flushable2 = new TestFlushable(300)
+        when:
+            flusher.addFlushable(flushable1)
+            flusher.addFlushable(flushable2)
+            boolean finishedInTme = BusyWaiter.busyWait({ flushable1.flushedTimes == 1 && flushable2.flushedTimes == 3 }, 1150, "waiting for flushables2")
+        then:
+            flushable1.flushedTimes == 1
+            flushable2.flushedTimes == 3
+            finishedInTme
+        cleanup:
+            flusher.stop()
+    }
+
     def "should try to flush n times and then postpone flush to next interval"()
     {
         given:
