@@ -38,8 +38,7 @@ public class QueueConfiguration
     InternalFileAccess internalFileAccess = InternalFileAccess.INSTANCE;
     @Builder.Default
     WriteThreshold writeThreshold = WriteThreshold.defaultThreshold();
+    boolean countDropped;
     @Builder.Default
-    boolean countDropped = false;
-    @Builder.Default
-    int batchSize = 50;
+    Batching batching = Batching.defaultConfiguration();
 }

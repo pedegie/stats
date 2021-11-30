@@ -9,6 +9,7 @@ class WriteFilterTest extends Specification
 {
     def setup()
     {
+        StatsQueue.stopFlusher()
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
@@ -23,7 +24,7 @@ class WriteFilterTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .batchSize(1)
+                    .batching(new Batching(1))
                     .disableCompression(true)
                     .writeFilter(WriteFilter.acceptWhenSizeHigherThan(3))
                     .writeThreshold(WriteThreshold.flushOnEachWrite())
@@ -48,7 +49,7 @@ class WriteFilterTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
                     .disableCompression(true)
-                    .batchSize(1)
+                    .batching(new Batching(1))
                     .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)

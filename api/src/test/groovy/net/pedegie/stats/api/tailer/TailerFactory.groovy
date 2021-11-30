@@ -1,6 +1,5 @@
 package net.pedegie.stats.api.tailer
 
-
 import net.pedegie.stats.api.queue.TestTailer
 
 import java.nio.file.Path

@@ -13,6 +13,7 @@ class ErrorHandlerTest extends Specification
 {
     def setup()
     {
+        StatsQueue.stopFlusher()
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
@@ -88,7 +89,7 @@ class ErrorHandlerTest extends Specification
 
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
-                    .batchSize(1)
+                    .batching(new Batching(1))
                     .disableCompression(true)
                     .mmapSize(OS.pageSize())
                     .writeThreshold(WriteThreshold.flushOnEachWrite())
@@ -134,7 +135,7 @@ class ErrorHandlerTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .disableCompression(true)
-                    .batchSize(1)
+                    .batching(new Batching(1))
                     .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .mmapSize(OS.pageSize())
                     .probeAccess(new ProbeAccess() {

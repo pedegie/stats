@@ -1,6 +1,7 @@
 package net.pedegie.stats.integrationtests
 
 import net.openhft.chronicle.core.OS
+import net.pedegie.stats.api.queue.Batching
 import net.pedegie.stats.api.queue.BusyWaiter
 import net.pedegie.stats.api.queue.FileUtils
 import net.pedegie.stats.api.queue.QueueConfiguration
@@ -30,7 +31,7 @@ class ReadWriteProbes extends Specification
 
     def setup()
     {
-        System.setProperty("disable.thread.safety", "true");
+        StatsQueue.stopFlusher()
         FileUtils.cleanDirectory(PATH.getParent())
     }
 
@@ -54,7 +55,7 @@ class ReadWriteProbes extends Specification
 
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(PATH)
-                    .batchSize(1)
+                    .batching(new Batching(1))
                     .writeThreshold(WriteThreshold.of(0, 1))
                     .mmapSize(OS.pageSize())
                     .build()
@@ -86,7 +87,7 @@ class ReadWriteProbes extends Specification
 
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(PATH)
-                    .batchSize(1)
+                    .batching(new Batching(1))
                     .writeThreshold(WriteThreshold.of(0, 1))
                     .mmapSize(OS.pageSize())
                     .build()
@@ -124,7 +125,7 @@ class ReadWriteProbes extends Specification
             QueueConfiguration queueConfiguration1 = QueueConfiguration.builder()
                     .path(PATH_1)
                     .countDropped(true)
-                    .batchSize(1)
+                    .batching(new Batching(1))
                     .mmapSize(Integer.MAX_VALUE)
                     .build()
             QueueConfiguration queueConfiguration2 = queueConfiguration1.withPath(PATH_2)

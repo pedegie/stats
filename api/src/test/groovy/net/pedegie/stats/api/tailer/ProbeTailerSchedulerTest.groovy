@@ -1,6 +1,7 @@
 package net.pedegie.stats.api.tailer
 
 import net.pedegie.stats.api.queue.FileUtils
+import net.pedegie.stats.api.queue.StatsQueue
 import net.pedegie.stats.api.queue.TestQueueUtil
 import spock.lang.Specification
 
@@ -11,6 +12,7 @@ class ProbeTailerSchedulerTest extends Specification
 {
     def setup()
     {
+        StatsQueue.stopFlusher()
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 

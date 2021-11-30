@@ -9,6 +9,7 @@ class CountProbesTest extends Specification
 {
     def setup()
     {
+        StatsQueue.stopFlusher()
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
@@ -38,7 +39,7 @@ class CountProbesTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .batchSize(1)
+                    .batching(new Batching(1))
                     .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
 
@@ -72,7 +73,7 @@ class CountProbesTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .batchSize(1)
+                    .batching(new Batching(1))
                     .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
 

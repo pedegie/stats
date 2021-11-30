@@ -1,5 +1,6 @@
 package net.pedegie.stats.jmh;
 
+import net.pedegie.stats.api.queue.Batching;
 import net.pedegie.stats.api.queue.FileUtils;
 import net.pedegie.stats.api.queue.QueueConfiguration;
 import net.pedegie.stats.api.queue.StatsQueue;
@@ -85,7 +86,7 @@ public class QueueStatsVsLinkedList
                         .path(randomPath())
                         .preTouch(true)
                         .mmapSize(4L << 30)
-                        .batchSize(20000)
+                        .batching(new Batching(20000, Long.MAX_VALUE))
                         .disableSynchronization(true)
                         .build();
 

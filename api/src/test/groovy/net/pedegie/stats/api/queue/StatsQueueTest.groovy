@@ -12,6 +12,7 @@ class StatsQueueTest extends Specification
 
     def setup()
     {
+        StatsQueue.stopFlusher()
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
         statsQueue = createQueue(new ConcurrentLinkedQueue<Integer>())
     }

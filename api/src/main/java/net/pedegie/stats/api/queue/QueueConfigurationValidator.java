@@ -18,9 +18,14 @@ class QueueConfigurationValidator
             throw new IllegalArgumentException(EXCEPTION_HEADER + "mmapSize: " + queueConfiguration.getMmapSize() + " cannot be less than page size: " + OS.pageSize());
         }
 
-        if(queueConfiguration.getBatchSize() < 1)
+        if (queueConfiguration.getBatching().getBatchSize() < 1)
         {
-            throw new IllegalArgumentException(EXCEPTION_HEADER + "batchSize: " + queueConfiguration.getBatchSize() + " cannot be less than 1");
+            throw new IllegalArgumentException(EXCEPTION_HEADER + "batchSize: " + queueConfiguration.getBatching().getBatchSize() + " cannot be less than 1");
+        }
+
+        if (queueConfiguration.getBatching().getFlushMillisThreshold() < 10)
+        {
+            throw new IllegalArgumentException(EXCEPTION_HEADER + "flushMillisThreshold: " + queueConfiguration.getBatching().getFlushMillisThreshold() + " cannot be less than 10");
         }
     }
 }

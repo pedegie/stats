@@ -11,6 +11,7 @@ class BatchingTest extends Specification
 {
     def setup()
     {
+        StatsQueue.stopFlusher()
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
@@ -28,7 +29,7 @@ class BatchingTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .batchSize(writeBatchSize)
+                    .batching(new Batching(writeBatchSize))
                     .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
 
@@ -87,7 +88,7 @@ class BatchingTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .batchSize(batchSize)
+                    .batching(new Batching(batchSize))
                     .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
         when:
@@ -122,7 +123,7 @@ class BatchingTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .batchSize(writeBatchSize)
+                    .batching(new Batching(writeBatchSize))
                     .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
 
@@ -179,7 +180,7 @@ class BatchingTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .batchSize(writeBatchSize)
+                    .batching(new Batching(writeBatchSize))
                     .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
 
@@ -222,7 +223,7 @@ class BatchingTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .batchSize(writeBatchSize)
+                    .batching(new Batching(writeBatchSize))
                     .writeThreshold(WriteThreshold.flushOnEachWrite())
                     .build()
 
@@ -260,6 +261,101 @@ class BatchingTest extends Specification
         then:
             probeTailer.probes() == 0
             testTailer.probes.size() == 6
+        cleanup:
+            queue.close()
+    }
+
+    def "batch flush should be idempotent if there isn't anything to flush"()
+    {
+        given:
+            int writeBatchSize = 5
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
+                    .batching(new Batching(writeBatchSize))
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
+                    .build()
+
+            TestTailer testTailer = new TestTailer()
+            TailerConfiguration tailerConfiguration = TailerConfiguration.builder()
+                    .tailer(testTailer)
+                    .path(TestQueueUtil.PATH)
+                    .build()
+
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
+            ProbeTailer probeTailer = ProbeTailer.from(tailerConfiguration)
+        when: "add one probe and flush"
+            queue.add(5)
+            queue.batchFlush()
+        then: "it contains 1 probe"
+            probeTailer.probes() == 1
+        when: "add one more probe and flush"
+            queue.add(5)
+            queue.batchFlush()
+        then: "it contains 2 probes"
+            probeTailer.probes() == 2
+        when: "batch flush without adding additional probes"
+            queue.batchFlush()
+        then: "no effect"
+            probeTailer.probes() == 2
+        cleanup:
+            queue.close()
+    }
+
+    def "batch flush should increase timestamp of next flush if there isn't anything to flush"()
+    {
+        given:
+            int writeBatchSize = 5
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
+                    .batching(new Batching(writeBatchSize, 500))
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
+                    .build()
+
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
+            long flushTimestamp = queue.lastBatchFlushTimestamp()
+        when:
+            sleep(3)
+        then:
+            queue.lastBatchFlushTimestamp() == flushTimestamp
+        when:
+            queue.batchFlush()
+        then:
+            queue.lastBatchFlushTimestamp() > flushTimestamp
+        cleanup:
+            queue.close()
+
+    }
+
+    def "batched probes should be flushed on flush threshold"()
+    {
+        given:
+            int writeBatchSize = 4
+            long flushMillisThreshold = 10
+
+            QueueConfiguration queueConfiguration = QueueConfiguration.builder()
+                    .path(TestQueueUtil.PATH)
+                    .mmapSize(OS.pageSize())
+                    .batching(new Batching(writeBatchSize, flushMillisThreshold))
+                    .writeThreshold(WriteThreshold.flushOnEachWrite())
+                    .build()
+
+            TestTailer testTailer = new TestTailer()
+            TailerConfiguration tailerConfiguration = TailerConfiguration.builder()
+                    .tailer(testTailer)
+                    .path(TestQueueUtil.PATH)
+                    .build()
+
+            StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
+            ProbeTailer probeTailer = ProbeTailer.from(tailerConfiguration)
+
+        when: "half of batch added"
+            queue.add(5)
+            queue.add(5)
+            boolean flushed = BusyWaiter.busyWait({ probeTailer.probes() == 2 }, 20, "waiting for flush")
+        then:
+            flushed
         cleanup:
             queue.close()
     }

@@ -11,6 +11,7 @@ class WriteThresholdTest extends Specification
 {
     def setup()
     {
+        StatsQueue.stopFlusher()
         FileUtils.cleanDirectory(TestQueueUtil.PATH.getParent())
     }
 
@@ -25,8 +26,8 @@ class WriteThresholdTest extends Specification
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
                     .mmapSize(OS.pageSize())
-                    .batchSize(1)
-                    .writeThreshold(WriteThreshold.of(10, 2))
+                    .batching(new Batching(1))
+                    .writeThreshold(WriteThreshold.of(20, 2))
                     .build()
             StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)
         when: "we put there 3 elements one by one instantly"
@@ -34,7 +35,7 @@ class WriteThresholdTest extends Specification
             queue.add(5)
             queue.add(5)
         and: "put next element after delay"
-            sleep(10)
+            sleep(20)
             queue.add(5)
             queue.close()
         then: "there are only 2 probes (+1 during close flush)"
@@ -48,7 +49,7 @@ class WriteThresholdTest extends Specification
         given:
             QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                     .path(TestQueueUtil.PATH)
-                    .batchSize(1)
+                    .batching(new Batching(1))
                     .mmapSize(OS.pageSize())
                     .writeThreshold(WriteThreshold.minSizeDifference(2))
                     .build()
