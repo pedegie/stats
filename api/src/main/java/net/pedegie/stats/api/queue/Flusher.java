@@ -141,6 +141,16 @@ class Flusher implements Runnable
         return false;
     }
 
+    private boolean acceptNewFlushable()
+    {
+        TimestampedFlushable flushable = newFlushable.getAndSet(null);
+        if (flushable == null)
+            return false;
+
+        flushables.add(flushable);
+        return true;
+    }
+
     private boolean flush(TimestampedFlushable flushable, long nextFlushTimestamp)
     {
         for (int i = 0; i < flushMaxTries; i++)
@@ -184,16 +194,6 @@ class Flusher implements Runnable
         Thread thread = this.flusherThread;
         if (thread != null && pausing.get())
             LockSupport.unpark(thread);
-    }
-
-    private boolean acceptNewFlushable()
-    {
-        TimestampedFlushable flushable = newFlushable.getAndSet(null);
-        if (flushable == null)
-            return false;
-
-        flushables.add(flushable);
-        return true;
     }
 
     private static class TimestampedFlushable

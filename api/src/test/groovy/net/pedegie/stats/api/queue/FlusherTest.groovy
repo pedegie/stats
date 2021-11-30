@@ -95,17 +95,17 @@ class FlusherTest extends Specification
     {
         given:
             Flusher flusher = new Flusher(1)
-            flusher.start()
             TestFlushable flushable1 = new TestFlushable(100)
             TestFlushable flushable2 = new TestFlushable(300)
             TestFlushable flushable3 = new TestFlushable(1000)
-        when:
             flusher.addFlushable(flushable1)
             flusher.addFlushable(flushable2)
             flusher.addFlushable(flushable3)
+            flusher.start()
+        when:
             boolean finishedInTme = BusyWaiter.busyWait({ flushable1.flushedTimes == 10 && flushable2.flushedTimes == 3 && flushable3.flushedTimes == 1 }, 1150, "waiting for flushables")
         then:
-            flushable1.flushedTimes < 12
+            flushable1.flushedTimes < 13
             flushable2.flushedTimes == 3
             flushable3.flushedTimes == 1
             finishedInTme
@@ -122,6 +122,7 @@ class FlusherTest extends Specification
             TestFlushable flushable2 = new TestFlushable(300)
         when:
             flusher.addFlushable(flushable1)
+            sleep(5)
             flusher.addFlushable(flushable2)
             boolean finishedInTme = BusyWaiter.busyWait({ flushable1.flushedTimes == 1 && flushable2.flushedTimes == 3 }, 1150, "waiting for flushables2")
         then:
