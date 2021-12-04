@@ -17,11 +17,11 @@ import java.nio.file.Path;
 @With
 public class QueueConfiguration
 {
-    private static final int MB_500 = 1024 * 1024 * 512;
+    private static final long MB_5 = 1024 * 1024 * 5;
 
     Path path;
     @Builder.Default
-    long mmapSize = MB_500;
+    long mmapSize = MB_5;
     @Builder.Default
     RollCycle rollCycle = RollCycles.DAILY;
     boolean disableCompression;
@@ -35,10 +35,11 @@ public class QueueConfiguration
     @Builder.Default
     ProbeAccess probeAccess = ProbeAccess.defaultAccess();
     @Builder.Default
-    InternalFileAccess internalFileAccess = InternalFileAccess.INSTANCE;
-    @Builder.Default
     WriteThreshold writeThreshold = WriteThreshold.defaultThreshold();
-    boolean countDropped;
     @Builder.Default
     Batching batching = Batching.defaultConfiguration();
+    @Builder.Default
+    InternalFileAccess internalFileAccess = InternalFileAccess.INSTANCE;
+    boolean countDropped;
+
 }

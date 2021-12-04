@@ -1,7 +1,6 @@
 package net.pedegie.stats.api.queue;
 
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
@@ -61,7 +60,6 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
     @SuppressWarnings("rawtypes")
     Bytes batchBytes;
 
-    @Builder
     @SneakyThrows
     protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration)
     {
@@ -119,6 +117,11 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
                         "preTouchEnabled: {}",
                 conf.getPath(), conf.getMmapSize(), conf.getRollCycle(),
                 conf.isDisableCompression(), conf.isDisableSynchronization(), conf.isPreTouch());
+    }
+
+    public static <T> StatsQueue<T> from(Queue<T> queue, QueueConfiguration queueConfiguration)
+    {
+        return new StatsQueue<>(queue, queueConfiguration);
     }
 
     @Override
@@ -306,7 +309,7 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
                 try
                 {
                     write(time, appender, false);
-                    nextWriteTimestamp = time + writeThreshold.getDelayBetweenWritesMillis();
+                    nextWriteTimestamp = time + writeThreshold.getMinDelayBetweenWritesMillis();
                     stateUpdater.intoFree();
                 } catch (Exception e)
                 {
