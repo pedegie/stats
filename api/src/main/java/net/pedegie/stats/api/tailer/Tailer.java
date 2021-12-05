@@ -7,5 +7,7 @@ public interface Tailer
 {
     void onProbe(Probe probe);
 
-    default void onClose() {}
+    default void onClose()
+    {
+    }
 }

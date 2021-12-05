@@ -52,7 +52,7 @@ public class StatsBlockingQueue<T> extends StatsQueue<T> implements BlockingQueu
     public T poll(long timeout, @NotNull TimeUnit unit) throws InterruptedException
     {
         T elem = blockingQueue.poll(timeout, unit);
-        if(elem != null)
+        if (elem != null)
         {
             adder.decrement();
             write(1);
@@ -69,8 +69,8 @@ public class StatsBlockingQueue<T> extends StatsQueue<T> implements BlockingQueu
     @Override
     public int drainTo(@NotNull Collection<? super T> c)
     {
-        int transferred =  blockingQueue.drainTo(c);
-        if(transferred != 0)
+        int transferred = blockingQueue.drainTo(c);
+        if (transferred != 0)
         {
             adder.add(-transferred);
             write(transferred);
@@ -81,8 +81,8 @@ public class StatsBlockingQueue<T> extends StatsQueue<T> implements BlockingQueu
     @Override
     public int drainTo(@NotNull Collection<? super T> c, int maxElements)
     {
-        int transferred =  blockingQueue.drainTo(c, maxElements);
-        if(transferred != 0)
+        int transferred = blockingQueue.drainTo(c, maxElements);
+        if (transferred != 0)
         {
             adder.add(-transferred);
             write(transferred);
