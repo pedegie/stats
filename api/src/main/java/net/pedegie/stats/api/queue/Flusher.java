@@ -77,7 +77,7 @@ class Flusher implements Runnable
         if (flusherThread != null)
         {
             LockSupport.unpark(flusherThread);
-            BusyWaiter.busyWait(() -> !flusherThread.isAlive(), 5000, "waiting for flusher termination");
+            BusyWaiter.busyWaitMillis(() -> !flusherThread.isAlive(), 5000, "waiting for flusher termination");
         }
     }
 
@@ -123,7 +123,7 @@ class Flusher implements Runnable
             if (flushed)
                 flushable.flushTimestamp = flushable.calculateNextFlushTimestamp();
             else
-                flushable.flushTimestamp = nextFlushTimestamp + flushable.batchFlushable.flushIntervalMillis();
+                flushable.flushTimestamp = addLong(nextFlushTimestamp, flushable.batchFlushable.flushIntervalMillis());
 
             flushables.add(flushable);
         }
@@ -161,7 +161,7 @@ class Flusher implements Runnable
             if (flushable.batchFlushable.batchFlush())
                 return true;
 
-            BusyWaiter.busyWait(1);
+            BusyWaiter.busyWaitMillis(1);
         }
         return false;
     }
@@ -185,7 +185,10 @@ class Flusher implements Runnable
 
         pausing.set(true);
         if (!Thread.currentThread().isInterrupted())
-            LockSupport.parkNanos(millis * 1_000_000);
+        {
+            long nanos = multiplyLong(millis, 1_000_000);
+            LockSupport.parkNanos(nanos);
+        }
         pausing.set(false);
     }
 
@@ -206,7 +209,7 @@ class Flusher implements Runnable
             this.batchFlushable = batchFlushable;
             if (batchFlushable.lastBatchFlushTimestamp() == 0)
             {
-                this.flushTimestamp = System.currentTimeMillis() + batchFlushable.flushIntervalMillis();
+                this.flushTimestamp = addLong(System.currentTimeMillis(), batchFlushable.flushIntervalMillis());
             } else
             {
                 this.flushTimestamp = calculateNextFlushTimestamp();
@@ -221,7 +224,19 @@ class Flusher implements Runnable
                 return flushTimestamp;
             }
 
-            return lastBatchFlushTimestamp + batchFlushable.flushIntervalMillis();
+            return addLong(lastBatchFlushTimestamp, batchFlushable.flushIntervalMillis());
         }
+    }
+
+    private static long addLong(long a1, long a2)
+    {
+        long result = a1 + a2;
+        return ((~a1 & ~a2 & result) < 0) ? Long.MAX_VALUE : result;
+    }
+
+    private static long multiplyLong(long a1, long a2)
+    {
+        long result = a1 * a2;
+        return ((~a1 & ~a2 & result) < 0) ? Long.MAX_VALUE : result;
     }
 }

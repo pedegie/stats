@@ -3,15 +3,15 @@ package net.pedegie.stats.api.queue;
 @FunctionalInterface
 public interface WriteFilter
 {
-    boolean shouldWrite(int size, long time);
+    boolean shouldWrite(int size, long timestamp);
 
     static WriteFilter acceptAllFilter()
     {
-        return (size, time) -> true;
+        return (size, timestamp) -> true;
     }
 
     static WriteFilter acceptWhenSizeHigherThan(int size)
     {
-        return (sizee, time) -> sizee > size;
+        return (sizee, timestamp) -> sizee > size;
     }
 }

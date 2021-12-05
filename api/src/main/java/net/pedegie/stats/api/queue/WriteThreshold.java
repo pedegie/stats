@@ -14,12 +14,12 @@ public class WriteThreshold
     private static final int DEFAULT_MIN_SIZE_DIFFERENCE = 1;
     private static final WriteThreshold DEFAULT = WriteThreshold.of(DEFAULT_DELAY_MILLIS, DEFAULT_MIN_SIZE_DIFFERENCE);
 
-    long delayBetweenWritesMillis;
+    long minDelayBetweenWritesMillis;
     int minSizeDifference;
 
-    public static WriteThreshold delayBetweenWrites(long delayBetweenWritesMillis)
+    public static WriteThreshold minDelayBetweenWritesMillis(long minDelayBetweenWritesMillis)
     {
-        return new WriteThreshold(delayBetweenWritesMillis, DEFAULT_MIN_SIZE_DIFFERENCE);
+        return new WriteThreshold(minDelayBetweenWritesMillis, DEFAULT_MIN_SIZE_DIFFERENCE);
     }
 
     public static WriteThreshold minSizeDifference(int minSizeDifference)
@@ -27,9 +27,9 @@ public class WriteThreshold
         return new WriteThreshold(DEFAULT_DELAY_MILLIS, minSizeDifference);
     }
 
-    public static WriteThreshold of(long delayBetweenWritesMillis, int minSizeDifference)
+    public static WriteThreshold of(long minDelayBetweenWritesMillis, int minSizeDifference)
     {
-        return new WriteThreshold(delayBetweenWritesMillis, minSizeDifference);
+        return new WriteThreshold(minDelayBetweenWritesMillis, minSizeDifference);
     }
 
     static WriteThreshold defaultThreshold()

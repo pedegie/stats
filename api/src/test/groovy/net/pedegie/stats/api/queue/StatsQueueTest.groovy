@@ -202,10 +202,6 @@ class StatsQueueTest extends Specification
                 .path(TestQueueUtil.PATH)
                 .mmapSize(OS.pageSize())
                 .build()
-
-        return StatsQueue.<Integer> builder()
-                .queue(queue)
-                .queueConfiguration(queueConfiguration)
-                .build()
+        return StatsQueue.queue(queue, queueConfiguration)
     }
 }

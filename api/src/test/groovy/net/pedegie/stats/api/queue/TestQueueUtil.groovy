@@ -10,9 +10,6 @@ class TestQueueUtil
 
     static StatsQueue<Integer> createQueue(QueueConfiguration queueConfiguration)
     {
-        StatsQueue.<Integer> builder()
-                .queue(new ConcurrentLinkedQueue<Integer>())
-                .queueConfiguration(queueConfiguration)
-                .build()
+        return StatsQueue.queue(new ConcurrentLinkedQueue<Integer>(), queueConfiguration)
     }
 }

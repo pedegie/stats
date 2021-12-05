@@ -2,7 +2,6 @@ package net.pedegie.stats.api.queue;
 
 public interface FileAccessErrorHandler
 {
-
     /**
      * @param throwable t
      * @return true if queue should be closed, false otherwise. Default is false
@@ -11,7 +10,6 @@ public interface FileAccessErrorHandler
     {
         return false;
     }
-
 
     static FileAccessErrorHandler logAndIgnore()
     {

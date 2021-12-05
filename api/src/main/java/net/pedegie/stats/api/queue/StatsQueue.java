@@ -1,7 +1,6 @@
 package net.pedegie.stats.api.queue;
 
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.SneakyThrows;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
@@ -20,6 +19,7 @@ import java.io.Closeable;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static net.pedegie.stats.api.queue.probe.ProbeHolder.PROBE_SIZE;
@@ -42,7 +42,6 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
     long batchFlushIntervalMillis;
 
     WriteThreshold writeThreshold;
-    Adder dropped;
     @NonFinal
     long nextWriteTimestamp;
     @NonFinal
@@ -53,7 +52,7 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
     ProbeAccess probeWriter;
 
     @NonFinal
-    volatile Adder adder;
+    volatile protected Adder adder;
     Thread appenderThread;
 
     @NonFinal
@@ -61,7 +60,6 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
     @SuppressWarnings("rawtypes")
     Bytes batchBytes;
 
-    @Builder
     @SneakyThrows
     protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration)
     {
@@ -94,7 +92,6 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
             this.internalFileAccess = queueConfiguration.getInternalFileAccess();
             this.writeThreshold = queueConfiguration.getWriteThreshold();
             this.nextWriteTimestamp = time();
-            this.dropped = queueConfiguration.isCountDropped() ? newAdder() : null;
             this.adder = newAdder();
             this.stateUpdater = disableSync ? Synchronizer.NON_SYNCHRONIZED.newStateUpdater() : Synchronizer.CONCURRENT.newStateUpdater();
             this.batchFlushIntervalMillis = queueConfiguration.getBatching().getFlushMillisThreshold();
@@ -119,6 +116,16 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
                         "preTouchEnabled: {}",
                 conf.getPath(), conf.getMmapSize(), conf.getRollCycle(),
                 conf.isDisableCompression(), conf.isDisableSynchronization(), conf.isPreTouch());
+    }
+
+    public static <T> StatsQueue<T> queue(Queue<T> queue, QueueConfiguration queueConfiguration)
+    {
+        return new StatsQueue<>(queue, queueConfiguration);
+    }
+
+    public static <T> StatsBlockingQueue<T> blockingQueue(BlockingQueue<T> queue, QueueConfiguration queueConfiguration)
+    {
+        return new StatsBlockingQueue<>(queue, queueConfiguration);
     }
 
     @Override
@@ -158,7 +165,7 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
     }
 
     @Override
-    public boolean add(T t)
+    public boolean add(@NotNull T t)
     {
         boolean added = queue.add(t);
         if (added)
@@ -242,7 +249,7 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
     }
 
     @Override
-    public boolean offer(T t)
+    public boolean offer(@NotNull T t)
     {
         boolean offered = queue.offer(t);
         if (offered)
@@ -291,7 +298,7 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
         return queue.peek();
     }
 
-    private void write(int difference)
+    protected void write(int difference)
     {
         write(difference, 1);
     }
@@ -306,7 +313,7 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
                 try
                 {
                     write(time, appender, false);
-                    nextWriteTimestamp = time + writeThreshold.getDelayBetweenWritesMillis();
+                    nextWriteTimestamp = time + writeThreshold.getMinDelayBetweenWritesMillis();
                     stateUpdater.intoFree();
                 } catch (Exception e)
                 {
@@ -318,13 +325,7 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
             } else if (flushing)
             {
                 tryAgain(difference, tries);
-            } else if (countDropped())
-            {
-                dropped.increment();
             }
-        } else if (countDropped())
-        {
-            dropped.increment();
         }
     }
 
@@ -335,9 +336,6 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
             log.warn("Cannot write to queue after {} tries because of batch flusher still takes precedence. " +
                     "Probe is dropped. Consider to increase 'QueueConfiguration.flushMillisThreshold' parameter " +
                     "to allow normal writing to queue.", tries);
-
-            if (countDropped())
-                dropped.increment();
         } else
         {
             Jvm.safepoint();
@@ -361,9 +359,6 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
             {
                 flush(appender, time);
             }
-        } else if (countDropped())
-        {
-            dropped.increment();
         }
     }
 
@@ -445,16 +440,6 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
             batchBytes.clear();
             lastBatchFlushTimestamp = flushTimestamp;
         }
-    }
-
-    public long getDropped()
-    {
-        return countDropped() ? dropped.sum() : -1;
-    }
-
-    private boolean countDropped()
-    {
-        return dropped != null;
     }
 
     private void writeFlush()

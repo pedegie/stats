@@ -15,7 +15,7 @@ class FlusherTest extends Specification
         when:
             flusher.stop()
         then:
-            BusyWaiter.busyWait({ flusher.flusherThread.state == Thread.State.TERMINATED }, 3000, "waiting for flusher thread termination")
+            BusyWaiter.busyWaitMillis({ flusher.flusherThread.state == Thread.State.TERMINATED }, 3000, "waiting for flusher thread termination")
         cleanup:
             flusher.stop()
     }
@@ -86,7 +86,7 @@ class FlusherTest extends Specification
             flushable2.close()
         then:
             flushables == 2 // it may be 2 or only 1 if one is currently processing
-            BusyWaiter.busyWait({ flusher.flushables.size() == 0 }, 300, "waiting for removing flushables")
+            BusyWaiter.busyWaitMillis({ flusher.flushables.size() == 0 }, 300, "waiting for removing flushables")
         cleanup:
             flusher.stop()
     }
@@ -103,7 +103,7 @@ class FlusherTest extends Specification
             flusher.addFlushable(flushable3)
             flusher.start()
         when:
-            boolean finishedInTme = BusyWaiter.busyWait({ flushable1.flushedTimes == 10 && flushable2.flushedTimes == 3 && flushable3.flushedTimes == 1 }, 1150, "waiting for flushables")
+            boolean finishedInTme = BusyWaiter.busyWaitMillis({ flushable1.flushedTimes == 10 && flushable2.flushedTimes == 3 && flushable3.flushedTimes == 1 }, 1150, "waiting for flushables")
         then:
             flushable1.flushedTimes < 13
             flushable2.flushedTimes == 3
@@ -124,7 +124,7 @@ class FlusherTest extends Specification
             flusher.addFlushable(flushable1)
             sleep(5)
             flusher.addFlushable(flushable2)
-            boolean finishedInTme = BusyWaiter.busyWait({ flushable1.flushedTimes == 1 && flushable2.flushedTimes == 3 }, 1150, "waiting for flushables2")
+            boolean finishedInTme = BusyWaiter.busyWaitMillis({ flushable1.flushedTimes == 1 && flushable2.flushedTimes == 3 }, 1150, "waiting for flushables2")
         then:
             flushable1.flushedTimes == 1
             flushable2.flushedTimes == 3
@@ -142,7 +142,7 @@ class FlusherTest extends Specification
             long start = System.nanoTime()
             flusher.addFlushable(flushable)
         when:
-            boolean flushed = BusyWaiter.busyWait({ flushable.lastBatchFlushTimestamp != 0 }, 215, "postpone flush")
+            boolean flushed = BusyWaiter.busyWaitMillis({ flushable.lastBatchFlushTimestamp != 0 }, 215, "postpone flush")
         then:
             flushed
             TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) > 190

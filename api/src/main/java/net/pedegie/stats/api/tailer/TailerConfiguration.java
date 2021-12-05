@@ -15,12 +15,14 @@ import java.nio.file.Path;
 @With
 public class TailerConfiguration
 {
+    private static final long MB_5 = 1024 * 1024 * 5;
+
     Path path;
     Tailer tailer;
     @Builder.Default
     ProbeAccess probeAccess = ProbeAccess.defaultAccess();
-    int mmapSize;
-    boolean preTouch;
+    @Builder.Default
+    long mmapSize = MB_5;
     @Builder.Default
     int batchSize = 50;
 }
