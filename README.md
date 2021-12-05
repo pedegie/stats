@@ -1,6 +1,6 @@
 # Stats
 
-**Stats** is Java tracing collection library. Stats allow monitoring yours `Collection`and `Map` with zero-cost overhead.
+**Stats** is Java tracing collection library. Stats allow monitoring yours `Collection`,`Map` and Thread Pools with zero-cost overhead.
 
 ## Table of contents
 
@@ -25,23 +25,23 @@
 
 
 ## Overview
-**Stats** is lightweight `Map` and `Collection` (and its children, like `Queue` / `List` / etc.) Decorator which saves to file
-current `size` of `Collection` on every each access if it changes its size - on reading side library can push data to
+**Stats** is lightweight `Map` and `Collection` decorator which saves to file
+current `size` of `Map/Collection` on every each access if it changes its size - on reading side library can push data to
 monitoring tools like [Graphite](https://graphiteapp.org/), [ElasticSearch](https://www.elastic.co/) or makes data
 available to [Prometheus](https://prometheus.io/) and other pull-based inspection tools.
 
-Library is build on top of [Chronicle-Queue](https://github.com/OpenHFT/Chronicle-Queue) which gives us huge advantage
-of super low latency and persistent data if crash happens or if we want to postpone publishing collected statistics.
+Library is build on top of [Chronicle-Queue](https://github.com/OpenHFT/Chronicle-Queue) giving us huge advantage
+of super low latency and persistence if crash occurs or if we want to postpone publishing collected statistics.
 
 ## Motivation
 The problem I have to deal with almost all my projects was: "How to monitor **efficiently** thread pools, without
 *observer-effect*?". I believe thread pools are the most important parts in correctly designed system, when it comes
 to monitoring, collecting statistics, scaling, debugging and bottleneck recognition.
 
-When you design your system, there are (or at least should be) separate thread pools for different responsibilities:
-thread pool which connects to database, services which asks network for data also usually need a thread pool,
+When you design your system there are (or at least should be) separate thread pools for different responsibilities:
+thread pool which connects to database, services which ask network for data also usually need a thread pool,
 for example most of HTTP client libraries use thread pools, some CPU-bound workload delegated to separate pool or just
-simple Akka actor consuming messages from queue which is served by Dispatcher. We can say, that our system is divided
+simple Akka actor consuming messages from queue which is served by Dispatcher. We can say that our system is divided
 into multiple parts separated by thread pools. What if we could get notification each time when pool is saturated? It's
 easy to point then **this** part of system is overload additionally with real-time monitoring we can just prevent
 overloading system by taking some actions **before** system becomes unresponsive or in the worst case crash.
@@ -59,7 +59,7 @@ process related to it, then try to resolve a stacktrace in hope we get into righ
 high CPU usage because of our GC is taking all CPU time performing full GCs, memory dump confirms there is a lot of
 `byte[]` arrays with given size, we can then look for these sizes in our app, but it's usually not that simple and
 in the best case time-consuming. The real problem is that on hardware / OS level we don't know anything
-about application logic - so we spend most time for linking one to the other. In both cases there is really huge chance
+about application logic - so we spend most time for linking one to the other. In both cases there is a big chance
 we can find problem just looking for saturated thread pools, in first case it would be some pool of network client
 which continuously sends requests, for further case maybe a lot of messages waits on our `Queue` because consumer isn't
 fast enough.
@@ -69,9 +69,9 @@ not enough, we can omit peaks, what if there was peak 95 000 elements in first m
 we cannot really find the problem in case of system slowdown / failure when peaks are overlooked. **Stats** records
 every single element, or at least enough to determine this situation. It's why, one of main goals of **Stats** is
 to be really fast, last thing we would like to do is putting pressure on already overloaded system - on the other hand,
-tracing overloaded system gives us the most important information, **Stats** is doing it with zero-cost.
+tracing overloaded system gives us the most important information. **Stats** is doing it with zero-cost.
 
-So basically, why it's `Map/Collection` Decorator instead of some "Thread Pool Stats"? Well, it's because of how Java thread
+So basically, why it's `Map/Collection` decorator instead of some "Thread Pool Stats"? Well, it's because of how Java thread
 pools works. When there isn't enough threads to do the job and max limit of threads in pool has been reached items
 go onto queue, we can say that thread pool is saturated when it contains at least single element on its queue - it's why monitoring
 of queue is the key. So if I'm going to create a queue monitoring library why not to extend this to `Map/Collection`
@@ -103,7 +103,7 @@ different processes - again thanks to [Chronicle-Queue](https://github.com/OpenH
 
 One of main **Stats** goals is to allow easy expandability:
 - adding new integration with monitoring systems should be easy as possible - [add new integration](#add-your-own-integration)
-- changes to most important parts of core **Stats** mechanisms should be easily by just providing custom implementation -
+- changes to most important parts of core **Stats** mechanisms should be done easily by just providing custom implementation -
   you can just plug-in your own `Probe` serializer / deserializer, compression mechanism, `Probe` filter, exception handler
   any many more - [features](#code-and-features)
 
@@ -115,12 +115,12 @@ Does it mean probe is lost then? No, lets explain how actually writing works.
 When you add or removes something from `Map/Collection` its `size` is kept in [LongAdder](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/atomic/LongAdder.html).
 Next, the writing thread have to win Compare and Swap instruction to exclusively access [Bytes](https://www.javadoc.io/doc/net.openhft/chronicle-bytes/1.12.17/net/openhft/chronicle/bytes/Bytes.html)
 where it puts current timestamp and `size` computed with `LongAdder.intValue()`. Bytes contain batched data,
-later flushed (see [Batching](#batching)) by `Flusher`. In case of  contention, thread just lose CAS but this change is still
+later flushed (see [Batching](#batching)) by [Flusher](#flusher). In case of  contention, thread just lose CAS but this change is still
 registered in `LongAdder` and is taken into account on next write. Mechanism is `lock-wait free` we say.
 
 ##### Non-Concurrent Collections:
-We can configure **Stats** to completely disable synchronization mechanisms - its useful when we don't work within
-concurrent environment or there is a guarantee that at most one thread at given time access `Map/Collection` - for example
+We can configure **Stats** to completely disable synchronization logic - its useful when our environment is not
+multithreaded or there is a guarantee that at most one thread at given time access `Map/Collection` - for example
 Akka's Actor could have some `Map` or `List` and as we know Actors are thread safe by design. In this scenario we
 should set parameter `disableSynchronization` to true during creating `StatsQueue`.
 
@@ -142,8 +142,8 @@ obvious bonus is that this format just takes less space.
 
 #### Flusher
 `Flusher` is a thread working in background. His responsibility is to flush data batched by all writers.
-For example we can configure `Batching` to flush every N probes or time threshold (see [Batching](#batching)).
-Time threshold is crucial because until we flush `ProbeTailer` don't see any probes so in case we are in "half of batch" state
+For example we can configure `Batching` to flush every N probes or time threshold (usually both) (see [Batching](#batching)).
+Time threshold is crucial because until we flush, `ProbeTailer` don't see any probes so in case we are in "half of batch" state
 and there isn't any more incoming probes to trigger threshold we need some utility to flush the batch - that's what `Flusher` is for.
 
 `Flusher` is designed to take CPU resources only when it needs to do some work. Every **Stats** decorated `Map/Collection` have
@@ -153,11 +153,12 @@ if head of queue representing `Map/Collection` wasn't flushed in meanwhile. If i
 otherwise few attempts (separated in time) are taken to flush data. **"Attempts"** because of the same [zero-cost](#zero-cost) rule described
 above. `Flusher` challenges the same synchronizer with CAS instruction, if it lost few times flushing is postponed
 to next interval. In case of high contention we won't put additional pressure on system also there is high chance that
-during writing probes (and writes actually happens because we lost CAS) it reaches `batchSize` and get flushed anyway.
+during writing probes (and writes actually happens because we lost CAS) it reaches `batchSize` and get flushed anyway before
+next `flushMillisThreshold`.
 
 #### Strong eventual consistency
 It's worth to mention that counting probes has `SEC` semantics. Multiple threads can access `LongAdder.add(n)` and they
-get eventually consistent during `LongAdder.intValue()` within thread, which win CAS challenge - keep it in mind in case of
+get eventually consistent during `LongAdder.intValue()` within thread, which win CAS challenge - keep it in mind when
 debugging.
 
 ## Code and Features
@@ -201,8 +202,8 @@ QueueConfiguration queueConfiguration = QueueConfiguration.builder()
         .build()
 ```
 #### disableSynchronization
-disables all synchronization mechanisms giving a bit of performance, use only if there is guarantee that at most one
-thread access `Map/Collection` at any time. It doesn't have to be **the same** thread, just **only one at given time**.
+disables all synchronization logic giving a bit of performance, use only if there is guarantee that at most one
+thread access `Map/Collection` at the same time. It doesn't have to be **the same** thread, just **only one at given time**.
 
 default: `false`
 ```java
@@ -278,7 +279,7 @@ public interface FileAccessErrorHandler
 If error occurs during closing file then return value is ignored, avoiding infinity loop. `StatsQueue` goes into `CLOSE_ONLY`
 state, see [closing file](#closing-stats). You can provide your own implementation.
 
-default: `FileAccessErrorHandler logAndIgnore()` - just logs and return `false`
+default: `FileAccessErrorHandler.logAndIgnore()` - just logs and return `false`
 ```java
 QueueConfiguration queueConfiguration = QueueConfiguration.builder()
         .path(Paths.get("probes.log"))
@@ -301,32 +302,32 @@ QueueConfiguration queueConfiguration = QueueConfiguration.builder()
 #### writeThreshold
 `WriteThreshold` is really useful when you expect huge load like tens of millions probes per second. It allows you
 give lower bounds conditions for writing probes and still keep negligible overhead equal to just `LongAdder.add()` and
-`System.currentTimestampMillis()` calls. It takes two parameters:
+`System.currentTimeMillis()()` calls. It takes two parameters:
 
-`minDelayBetweenWritesMillis` - determines minimum delay between two writes in millis  
+`minDelayBetweenWritesMillis` - determines minimum delay between two writes in milliseconds
 `minSizeDifference` - determines minimum size difference which queue must change
 
 If any of above is met - writing process continues.
 
 Let's say incoming load is 100k probes per second on average, if you set `minDelayBetweenWritesMillis` to 100 there
-will be only 10 writes per second on average instead of 100k - huge boost! But what if we are streaming live data
-to our monitoring system, and we are really interested in both: peaks when collection size significantly increased
+will be only 10 writes per second on average instead of 100k - huge boost! But what if we are interested in both: 
+peaks when collection size significantly increased
 (`queue.addAll(n)`, where n contains many elements) or opposite (`queue.clear()`) - in both cases it may be worth to
 notice that change, maybe they happen periodically? It's when `minSizeDifference` comes into play. If set to 20 and
 `queue.clear()` removes at least 20 elements then write is forced - it refers to all methods which allows
 modifying size by more than one.
 
 `WriteThreshold` is a tradeoff between losing a bit of variance for better throughput. If we save queue `size`
-each 5 millis instead of on every access we don't know how load was distributed within these 5 millis. For example
-if in 1-st millisecond we add 1000 elements and then in 4-th millisecond queue is cleared - this change can be lost
-in case of `minSizeDifference` is set to above than 1000.
+each 5 milliseconds instead of on every access we don't know how load was distributed within these 5 milliseconds. For example
+if in 1-st millisecond we add 1000 elements and then in 4-th millisecond queue is cleared - this change may be not
+noticed in case of `minSizeDifference` is set to above than 1000.
 
 Can't we do that with `WriteFilter`? Sure we can, but note than `WriteFiter` already takes `size` as argument
 what means we have to compute that invoking `LongAdder.intValue()` and win CAS race because `LongAdder` computation
 happens only after successful CAS. Both gives some overhead  which may be significant when dealing with huge loads.
 If we can decide earlier to skip write it's better to do this earlier. If we discard write request at `WriteThreshold`
 whole overhead is just `LongAdder.add()` (in non-synchronized mode just `i++` instead) and `System.currentTimeMillis()`
-call. Does it mean probes are dropped then? - [again no](#zero-cost).
+calls. Does it mean probes are dropped then? - [again no](#zero-cost).
 
 default: `minDelayBetweenWritesMillis` is 5000, `minSizeDifference` is 1
 
@@ -343,18 +344,19 @@ QueueConfiguration queueConfiguration = QueueConfiguration.builder()
 `Batching` in simple words is a tradeoff between faster writes and data visibility by `ProbeTailer`. It takes two
 parameters:
 
-`flushMillisThreshold` - maximum interval in millis between flushes   
+`flushMillisThreshold` - maximum interval in milliseconds between flushes   
 `batchSize` - how many probes we can batch before flush
 
 We need both to ensure that `ProbeTailer` will ever see actual data. See [Flusher section](#flusher) for detailed
 explanation how flushing works. Basically if you don't expect to push / expose your data to monitoring tools
 more often than 1 minute set `flushMillisThreshold` to `60 * 1000`. `batchSize` should be big enough to store all
-probes incoming within `flushMillisThreshold`. Also keep in mind that batched data also takes RAM space, and it's stored on off-heap.
+incoming probes within `flushMillisThreshold`. Also keep in mind that batched data also takes RAM space, and it's stored 
+on off-heap.
 
 There is relation between `Batching` and `WriteThreshold`. If you set `WriteThreshold.minDelayBetweenWritesMillis`
-to one minute it means that there is only one write to **batched data** per minute. In case of `Batching.batchSize`
+to one minute it means that there is only one write **to batched data** per minute. In case of `Batching.batchSize`
 set to 20 - it means that `ProbeTailer` will see changes after 20 minutes (during batch flush). So you should configure
-then `Batching.flushMillisThreshold` to some lower value, lets say default 5 millis to ensure visibility data by
+then `Batching.flushMillisThreshold` to some lower value, lets say default 5 milliseconds to ensure visibility data by
 `ProbeTailer`.
 
 default: `flushMillisThreshold` is 5000, `batchSize` is 50
@@ -513,11 +515,11 @@ permanently, so `ProbeTailer` and our monitoring tools will never see this data.
 
 #### ProbeTailer
 On read-side `ProbeTailer`commit each whole read batch. So in case of crash it will re-read some probes again.
-For example if batchSize is 100, and we have read 70 probes and then system crash - these 70 probes will be read again.
+For example if `batchSize` is 100, and we have read 70 probes and then system crash - these 70 probes will be read again.
 
 In my opinion in this kind of library it's not that big problem that we lost some data, at least comparing to
 losing database transaction for example. If we lost write-side data, we just lost a little of statistics representing
-short period of time. On the read side, we have to just re-read probes again, each probe contains a timestamp when
+short period of time. On the read side, we have to re-read probes again, each probe contains a timestamp when
 it was recorded so our monitoring tools can probably easily handle this situation. You should consider it for your own
 uses cases.
 
@@ -537,7 +539,7 @@ Benchmark                                                            Mode  Cnt  
 QueueStatsVsLinkedList.TestBenchmark2.LinkedList1usDelay            avgt    4  516184.311 ±  7847.159  us/op
 QueueStatsVsLinkedList.TestBenchmark2.StatsQueueLinkedList1usDelay  avgt    4  516936.845 ± 10618.058  us/op
 ```
-We can see that if adding messages have some delay between - there is almost no overhead at all.
+We can see that if adding messages have 1 μs delay between - there is almost no overhead at all.
 
 ### `QueueStats` vs `LinkedList` no delay between adds
 ```
@@ -608,8 +610,8 @@ QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue 
 ```
 We can see here a little higher overhead. **Stats** needs to call `System.currentTimeMillis()` but main overhead
 in concurrent environment comes from `LongAdder.intValue()`, generating timestamp is relatively small. Let's set
-`WriteThreshold.minSizeDifference` to 2 and `Batching.flushMillisThreshold` to 5 millis, so we write current
-`size()` of queue every each 5 millis to file.
+`WriteThreshold.minSizeDifference` to 2 and `Batching.flushMillisThreshold` to 5 milliseconds, so we write current
+`size()` of queue every each 5 milliseconds to file.
 
 ```
 Benchmark                                                                        (threads)  Mode  Cnt     Score     Error  Units
@@ -622,8 +624,11 @@ QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue 
 QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue         64  avgt    4  1725.157 ±  29.242  ms/op
 QueueStatsVsConcurrentLinkedQueue.TestBenchmark.StatsQueueConcurrentLinkedQueue        128  avgt    4  3521.783 ± 160.634  ms/op
 ```
-On my hardware we can say that if probes comes at 1 mln / sec rate there is no overhead at all. For bigger
-throughput we many need configure `Batching` and `WriteThreshold`.
+
+#### Summary
+
+On my hardware we can say that if probes comes at 1 mln/second rate there is no overhead at all. For bigger
+throughput we may need configure `Batching` and `WriteThreshold`.
 
 ## Supported Monitoring Tools
 ### Prometheus
