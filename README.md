@@ -313,7 +313,7 @@ If any of above is met - writing process continues.
 
 Let's say incoming load is 100k probes per second on average, if you set `minDelayBetweenWritesMillis` to 100 there
 will be only 10 writes per second on average instead of 100k - huge boost! But what if we are interested in both: 
-peaks when collection size significantly increased
+peaks when collection size is significantly increased
 (`queue.addAll(n)`, where n contains many elements) or opposite (`queue.clear()`) - in both cases it may be worth to
 notice that change, maybe they happen periodically? It's when `minSizeDifference` comes into play. If set to 20 and
 `queue.clear()` removes at least 20 elements then write is forced - it refers to all methods which allows
