@@ -208,7 +208,7 @@ class ReadWriteProbes extends Specification
             pool.submit(addElementsToQueue2)
             scheduler.addTailer(probeTailer1)
 
-            boolean allRead = BusyWaiter.busyWait({
+            boolean allRead = BusyWaiter.busyWaitMillis({
                 long read = tailer1.probesRead + tailer2.probesRead + statsQueue1.dropped + statsQueue2.dropped
                 read == requiredAmountOfReadElements
             }, 5000, "waiting for tailers read")

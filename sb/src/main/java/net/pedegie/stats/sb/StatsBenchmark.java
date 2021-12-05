@@ -144,10 +144,7 @@ public class StatsBenchmark
                 .mmapSize(Integer.MAX_VALUE)
                 .build();
 
-        return StatsQueue.<Integer>builder()
-                .queue(new ConcurrentLinkedQueue<>())
-                .queueConfiguration(queueConfiguration)
-                .build();
+        return StatsQueue.queue(new ConcurrentLinkedQueue<>(), queueConfiguration);
     }
 
     private static Runnable producer(ProgramArguments programArguments, Queue<Integer> queueStats)

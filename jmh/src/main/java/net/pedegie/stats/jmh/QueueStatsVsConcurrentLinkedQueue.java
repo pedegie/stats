@@ -1,7 +1,9 @@
 package net.pedegie.stats.jmh;
 
+import net.pedegie.stats.api.queue.Batching;
 import net.pedegie.stats.api.queue.FileUtils;
 import net.pedegie.stats.api.queue.StatsQueue;
+import net.pedegie.stats.api.queue.WriteThreshold;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -21,37 +23,14 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import static net.pedegie.stats.jmh.Benchmark.randomPath;
 import static net.pedegie.stats.jmh.Benchmark.runBenchmarkForQueue;
-
-/*
-Benchmark                                                                        (threads)  Mode  Cnt     Score      Error  Units
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue          1  avgt    4     6.858 ±   0.255  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue          2  avgt    4    27.704 ±   0.181  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue          4  avgt    4    79.120 ±   0.176  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue          8  avgt    4   190.710 ±   5.323  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue         16  avgt    4   398.185 ±   8.719  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue         32  avgt    4   806.083 ±  12.033  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue         64  avgt    4  1620.848 ±  21.684  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.AStatsQueueConcurrentLinkedQueue        128  avgt    4  3315.942 ± 143.496  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                     1  avgt    4     4.787 ±   0.122  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                     2  avgt    4    22.304 ±   1.239  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                     4  avgt    4    60.345 ±   8.981  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                     8  avgt    4   168.159 ±   9.305  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    16  avgt    4   370.877 ±   9.365  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    32  avgt    4   778.762 ±  68.289  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                    64  avgt    4  1578.408 ±  69.265  ms/op
-QueueStatsVsConcurrentLinkedQueue.TestBenchmark.ConcurrentLinkedQueue                   128  avgt    4  2059.477 ± 104.889  ms/op
-*/
-
 
 public class QueueStatsVsConcurrentLinkedQueue
 {
@@ -65,7 +44,7 @@ public class QueueStatsVsConcurrentLinkedQueue
     public static class TestBenchmark
     {
         @Benchmark
-        public void AStatsQueueConcurrentLinkedQueue(QueueConfiguration queueConfiguration)
+        public void StatsQueueConcurrentLinkedQueue(QueueConfiguration queueConfiguration)
         {
             queueConfiguration.statsQueueConcurrentLinkedQueueBenchmark.get();
         }
@@ -76,16 +55,28 @@ public class QueueStatsVsConcurrentLinkedQueue
             queueConfiguration.concurrentLinkedQueueBenchmark.get();
         }
 
+        @Benchmark
+        public void StatsQueueConcurrentLinkedQueue1usDelay(QueueConfiguration queueConfiguration)
+        {
+            queueConfiguration.statsQueueConcurrentLinkedQueue1usDelayBenchmark.get();
+        }
+
+        @Benchmark
+        public void ConcurrentLinkedQueue1usDelay(QueueConfiguration queueConfiguration)
+        {
+            queueConfiguration.concurrentLinkedQueue1usDelayBenchmark.get();
+        }
+
         @State(Scope.Benchmark)
         public static class QueueConfiguration
         {
-            private static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue", "stats_queue.log").toAbsolutePath();
-
             @Param({"1", "2", "4", "8", "16", "32", "64", "128"})
             public int threads;
 
             Supplier<Void> statsQueueConcurrentLinkedQueueBenchmark;
             Supplier<Void> concurrentLinkedQueueBenchmark;
+            Supplier<Void> statsQueueConcurrentLinkedQueue1usDelayBenchmark;
+            Supplier<Void> concurrentLinkedQueue1usDelayBenchmark;
 
             ExecutorService producerThreadPool;
             ExecutorService consumerThreadPool;
@@ -96,20 +87,20 @@ public class QueueStatsVsConcurrentLinkedQueue
             {
                 producerThreadPool = Executors.newFixedThreadPool(threads, new net.pedegie.stats.jmh.Benchmark.NamedThreadFactory("producer_pool-%d"));
                 consumerThreadPool = Executors.newFixedThreadPool(threads, new net.pedegie.stats.jmh.Benchmark.NamedThreadFactory("consumer_pool-%d"));
-                FileUtils.cleanDirectory(testQueuePath.getParent());
-
+                FileUtils.cleanDirectory(net.pedegie.stats.jmh.Benchmark.testQueuePath.getParent());
                 var queueConfiguration = net.pedegie.stats.api.queue.QueueConfiguration.builder()
-                        .path(testQueuePath.getParent().resolve(Paths.get(testQueuePath.getFileName() + UUID.randomUUID().toString())))
+                        .path(randomPath())
                         .preTouch(true)
                         .mmapSize(Integer.MAX_VALUE)
+                        .writeThreshold(WriteThreshold.minSizeDifference(2))
+                        .batching(new Batching(20000, 5000))
                         .build();
 
-                statsQueue = StatsQueue.<Integer>builder()
-                        .queue(new ConcurrentLinkedQueue<>())
-                        .queueConfiguration(queueConfiguration)
-                        .build();
+                statsQueue = StatsQueue.queue(new ConcurrentLinkedQueue<>(), queueConfiguration);
                 statsQueueConcurrentLinkedQueueBenchmark = runBenchmarkForQueue(statsQueue, threads, producerThreadPool, consumerThreadPool);
                 concurrentLinkedQueueBenchmark = runBenchmarkForQueue(new ConcurrentLinkedQueue<>(), threads, producerThreadPool, consumerThreadPool);
+                statsQueueConcurrentLinkedQueue1usDelayBenchmark = runBenchmarkForQueue(statsQueue, threads, producerThreadPool, consumerThreadPool, 1000);
+                concurrentLinkedQueue1usDelayBenchmark = runBenchmarkForQueue(new ConcurrentLinkedQueue<>(), threads, producerThreadPool, consumerThreadPool, 1000);
             }
 
 
@@ -130,31 +121,30 @@ public class QueueStatsVsConcurrentLinkedQueue
                 statsQueue.close();
             }
         }
+    }
 
+    public static void main(String[] args) throws RunnerException
+    {
 
-        public static void main(String[] args) throws RunnerException
-        {
-
-            Options options = new OptionsBuilder()
-                    .include(QueueStatsVsConcurrentLinkedQueue.class.getSimpleName())
-                    /*              .jvmArgs("-Xlog:codecache+sweep*=trace," +
-                                          "class+unload," +
-                                          "class+load," +
-                                          "os+thread," +
-                                          "safepoint," +
-                                          "gc*," +
-                                          "gc+stringdedup=debug," +
-                                          "gc+ergo=trace," +
-                                          "gc+age=trace," +
-                                          "gc+phases=trace," +
-                                          "gc+humongous=trace," +
-                                          "jit+compilation=debug" +
-                                          ":file=/tmp/app.log" +
-                                          ":level,tags,time,uptime" +
-                                          ":filesize=104857600,filecount=5")*/
-                    .build();
-            new Runner(options).run();
-        }
+        Options options = new OptionsBuilder()
+                .include(QueueStatsVsConcurrentLinkedQueue.class.getSimpleName())
+                /*              .jvmArgs("-Xlog:codecache+sweep*=trace," +
+                                      "class+unload," +
+                                      "class+load," +
+                                      "os+thread," +
+                                      "safepoint," +
+                                      "gc*," +
+                                      "gc+stringdedup=debug," +
+                                      "gc+ergo=trace," +
+                                      "gc+age=trace," +
+                                      "gc+phases=trace," +
+                                      "gc+humongous=trace," +
+                                      "jit+compilation=debug" +
+                                      ":file=/tmp/app.log" +
+                                      ":level,tags,time,uptime" +
+                                      ":filesize=104857600,filecount=5")*/
+                .build();
+        new Runner(options).run();
     }
 
 

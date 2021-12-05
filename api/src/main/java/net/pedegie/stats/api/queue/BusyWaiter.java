@@ -9,7 +9,7 @@ import java.util.function.BooleanSupplier;
 @Slf4j
 public class BusyWaiter
 {
-    public static boolean busyWait(BooleanSupplier condition, int maxWaitMillis, String conditionDescription)
+    public static boolean busyWaitMillis(BooleanSupplier condition, int maxWaitMillis, String conditionDescription)
     {
         long maxWaitNanos = TimeUnit.MILLISECONDS.toNanos(maxWaitMillis);
 
@@ -29,12 +29,12 @@ public class BusyWaiter
         return true;
     }
 
-    public static void busyWait(long millis)
+    public static void busyWaitMillis(long millis)
     {
-        busyWait(millis * 1e6);
+        busyWaitNanos(millis * 1e6);
     }
 
-    private static void busyWait(double nanos)
+    public static void busyWaitNanos(double nanos)
     {
         long start = System.nanoTime();
         while (System.nanoTime() - start < nanos)

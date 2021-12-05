@@ -353,7 +353,7 @@ class BatchingTest extends Specification
         when: "half of batch added"
             queue.add(5)
             queue.add(5)
-            boolean flushed = BusyWaiter.busyWait({ probeTailer.probes() == 2 }, 20, "waiting for flush")
+            boolean flushed = BusyWaiter.busyWaitMillis({ probeTailer.probes() == 2 }, 20, "waiting for flush")
         then:
             flushed
         cleanup:

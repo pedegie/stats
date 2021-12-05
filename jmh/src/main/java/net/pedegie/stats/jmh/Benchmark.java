@@ -1,18 +1,20 @@
 package net.pedegie.stats.jmh;
 
+import net.pedegie.stats.api.queue.BusyWaiter;
 import org.jetbrains.annotations.NotNull;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
@@ -22,15 +24,13 @@ public class Benchmark
 
     public static Supplier<Void> runBenchmarkForQueue(Queue<Integer> queue, int threads, ExecutorService producerPool, ExecutorService consumerPool)
     {
+        return runBenchmarkForQueue(queue, threads, producerPool, consumerPool, -1L);
+    }
+
+    public static Supplier<Void> runBenchmarkForQueue(Queue<Integer> queue, int threads, ExecutorService producerPool, ExecutorService consumerPool, long delayNanos)
+    {
         int messagesToSendPerThread = 50000;
-        Runnable producer = () ->
-        {
-            for (int i = 1; i <= messagesToSendPerThread; i++)
-            {
-                queue.add(i);
-            }
-            queue.add(POISON_PILL);
-        };
+        Runnable producer = delayNanos > 0 ? delayedWriter(queue, messagesToSendPerThread, delayNanos) : writer(queue, messagesToSendPerThread);
         Runnable consumer = () ->
         {
             while (true)
@@ -66,17 +66,36 @@ public class Benchmark
             try
             {
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{})).get(60, TimeUnit.SECONDS);
-            } catch (InterruptedException e)
-            {
-                e.printStackTrace();
-            } catch (ExecutionException e)
-            {
-                e.printStackTrace();
-            } catch (TimeoutException e)
+            } catch (Exception e)
             {
                 e.printStackTrace();
             }
             return null;
+        };
+    }
+
+    private static Runnable writer(Queue<Integer> queue, int messagesToSendPerThread)
+    {
+        return () ->
+        {
+            for (int i = 1; i <= messagesToSendPerThread; i++)
+            {
+                queue.add(i);
+            }
+            queue.add(POISON_PILL);
+        };
+    }
+
+    private static Runnable delayedWriter(Queue<Integer> queue, int messagesToSendPerThread, long nanos)
+    {
+        return () ->
+        {
+            for (int i = 1; i <= messagesToSendPerThread; i++)
+            {
+                queue.add(i);
+                BusyWaiter.busyWaitNanos(nanos);
+            }
+            queue.add(POISON_PILL);
         };
     }
 
@@ -95,5 +114,12 @@ public class Benchmark
         {
             return new Thread(r, String.format(name, threadNumber.incrementAndGet()));
         }
+    }
+
+    public static final Path testQueuePath = Paths.get(System.getProperty("java.io.tmpdir"), "stats_queue", "stats_queue.log").toAbsolutePath();
+
+    public static Path randomPath()
+    {
+        return testQueuePath.getParent().resolve(Paths.get(testQueuePath.getFileName() + UUID.randomUUID().toString()));
     }
 }

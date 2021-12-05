@@ -40,6 +40,5 @@ public class QueueConfiguration
     Batching batching = Batching.defaultConfiguration();
     @Builder.Default
     InternalFileAccess internalFileAccess = InternalFileAccess.INSTANCE;
-    boolean countDropped;
 
 }
