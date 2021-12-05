@@ -438,7 +438,7 @@ scheduler.addTailer(tailer2);
 scheduler.close();
 ```
 ### Closing Stats
-When it comes to cleaning resources we can notice there is *abstraction leak*. As we know Java `Map/Collection` interface
+When it comes to cleaning resources we can notice there is an *abstraction leak*. As we know Java `Map/Collection` interface
 don't have `close()` method therefore that **Stats** access *Memory Mapped File* we have to clean resources.
 Keep in mind that **Stats** store its data off-heap. There  are 4 components which may need to be closed, lets take
 a look on each one.
