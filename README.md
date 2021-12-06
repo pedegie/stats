@@ -1,8 +1,8 @@
 # Stats
 
-**Stats** is Java tracing collection library. Stats allow monitoring yours `Collection`,`Map` and Thread Pools with zero-cost overhead.
+**Stats** is Java collection tracing library. Stats allow monitoring yours `Collection`,`Map` and Thread Pools with zero-cost overhead.
 
-**ITS STILL UNDER DEVELOPMENT - DON'T USE ON PRODUCTION**
+**ITS STILL UNDER DEVELOPMENT - NOT PRODUCTION READY YET**
 
 ## Table of contents
 
@@ -46,14 +46,15 @@ for example most of HTTP client libraries use thread pools, some CPU-bound workl
 simple Akka actor consuming messages from queue which is served by Dispatcher. We can say that our system is divided
 into multiple parts separated by thread pools. What if we could get notification each time when pool is saturated? It's
 easy to point then **this** part of system is overload additionally with real-time monitoring we can just prevent
-overloading system by taking some actions **before** system becomes unresponsive or in the worst case crash.
+overloads by taking some actions **before** system becomes unresponsive or in the worst case crash.
 
 Another situation is: system failure - client says that something is going wrong, lets say users cannot log in to site,
 and we don't see any errors or other team within our company complains that sometimes they get disconnects from our service
 with no reason - these problems are really hard to diagnose when it just slowdowns without any explicit reason.  
+
 Typically, in kind of these problems we dive into investigating our machine - checking RAM, CPU, network,
 file descriptors, thread dumps, it may be necessary to run some tracing / profiling tools too - which is not always
-the case especially in production systems. If we think about it a little more - we do it all in one reason: link
+the case especially in production environments. If we think about it a little more - we do it all in one reason: link
 hardware problems to source code, then we can determine what the problem is and
 propose solution. For example our outbound network interface is overloaded, by continuously sending huge packages what
 shouldn't happen, we can use tools like `bpftrace` to capture packages with corresponding size, find port and
@@ -61,7 +62,7 @@ process related to it, then try to resolve a stacktrace in hope we get into righ
 high CPU usage because of our GC is taking all CPU time performing full GCs, memory dump confirms there is a lot of
 `byte[]` arrays with given size, we can then look for these sizes in our app, but it's usually not that simple and
 in the best case time-consuming. The real problem is that on hardware / OS level we don't know anything
-about application logic - so we spend most time for linking one to the other. In both cases there is a big chance
+about application logic - so we spend most time for linking one to the other. In both cases there is a chance
 we can find problem just looking for saturated thread pools, in first case it would be some pool of network client
 which continuously sends requests, for further case maybe a lot of messages waits on our `Queue` because consumer isn't
 fast enough.
@@ -530,7 +531,7 @@ Benchmark shows how big performance overhead imposes decorating collection compa
 We are comparing both versions: [concurrent](#concurrent-collections) and with [disabled synchronization](#non-concurrent-collections).
 Two cases will be taken into account, first one adds 1 μs delay between `add()` and second version without any delays.
 Read side is just calling `poll()`. Keep in mind that **Stats** have to trace every each `LinkedList`
-access (`add`() / `poll`), generate timestamp and write 12 bytes to file.
+access (`add()` / `poll`), generate timestamp and write 12 bytes to file.
 
 Benchmarks are performed using AMD Ryzen 9 3900X 12-Core (24 logical) with SMT (Hyper-Threading in Intel CPUs) enabled
 and no thread affinity.
