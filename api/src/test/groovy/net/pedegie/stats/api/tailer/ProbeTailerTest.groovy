@@ -61,22 +61,23 @@ class ProbeTailerTest extends Specification
                     .path(TestQueueUtil.PATH)
                     .build()
             ProbeTailer probeTailer = ProbeTailer.from(configuration)
-        when: "read first 10 probes"
-            probeTailer.read(10)
+        when: "read first 12 probes"
+            probeTailer.read(12)
             probeTailer.close()
         and:
             probeTailer = ProbeTailer.from(configuration)
-        then: "it has 10 elements more"
-            probeTailer.probes() == 10
+        then: "it has 8 elements more"
+            probeTailer.probes() == 8
+            tailer.probes.size() == 12
         when: "read from start"
             probeTailer.readFromStart()
         then:
-            tailer.probes.size() == 30
+            tailer.probes.size() == 32
         when:
             writeElementsTo(5, TestQueueUtil.PATH)
             probeTailer.readFromStart()
         then:
-            tailer.probes.size() == 55
+            tailer.probes.size() == 57
     }
 
     def "should continue reading probes from last read probe"()
@@ -365,12 +366,16 @@ class ProbeTailerTest extends Specification
             tailer.probes.size() == 30
     }
 
-
     static void writeElementsTo(int elements, Path path)
+    {
+        writeElementsTo(elements, path, 3)
+    }
+
+    static void writeElementsTo(int elements, Path path, int batchSize)
     {
         QueueConfiguration queueConfiguration = QueueConfiguration.builder()
                 .path(path)
-                .batching(new Batching(1))
+                .batching(new Batching(batchSize))
                 .mmapSize(OS.pageSize())
                 .build()
         StatsQueue<Integer> queue = TestQueueUtil.createQueue(queueConfiguration)

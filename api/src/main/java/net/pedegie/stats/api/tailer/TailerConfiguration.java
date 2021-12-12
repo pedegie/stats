@@ -23,6 +23,4 @@ public class TailerConfiguration
     ProbeAccess probeAccess = ProbeAccess.defaultAccess();
     @Builder.Default
     long mmapSize = MB_5;
-    @Builder.Default
-    int batchSize = 50;
 }

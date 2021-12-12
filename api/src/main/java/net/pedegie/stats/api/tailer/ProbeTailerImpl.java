@@ -34,9 +34,6 @@ class ProbeTailerImpl implements ProbeTailer
     {
         System.setProperty("disable.thread.safety", "true");
 
-        if (tailerConfiguration.getBatchSize() < 1)
-            throw new IllegalArgumentException("batchSize: " + tailerConfiguration.getBatchSize() + " cannot be less than 1");
-
         this.chronicleQueue = SingleChronicleQueueBuilder
                 .binary(tailerConfiguration.getPath())
                 .blockSize(tailerConfiguration.getMmapSize())
@@ -46,7 +43,7 @@ class ProbeTailerImpl implements ProbeTailer
         this.chronicleTailer = chronicleQueue.createTailer(tailerConfiguration.getPath().toString());
         this.currentBatchContext = chronicleTailer.readingDocument();
         this.probeAccess = tailerConfiguration.getProbeAccess();
-        this.batchBytes = Bytes.allocateDirect((long) tailerConfiguration.getBatchSize() * PROBE_SIZE);
+        this.batchBytes = Bytes.allocateElasticDirect(0);
         tryToFigureOutPerBatchProbes();
     }
 
@@ -79,7 +76,7 @@ class ProbeTailerImpl implements ProbeTailer
 
     private boolean hasBatchedSomeData()
     {
-        return countProbes(batchBytes) > 0;
+        return countProbes(batchBytes) > 0 && batchBytes.readLong(batchBytes.readPosition()) != 0;
     }
 
     @Override
@@ -87,11 +84,7 @@ class ProbeTailerImpl implements ProbeTailer
     {
         while (thereIsSomethingToRead(chronicleTailer))
         {
-            while (hasBatchedSomeData())
-            {
-                probeAccess.readProbeInto(batchBytes, probe);
-                tailer.onProbe(probe);
-            }
+            readProbesFromBatchBytes();
         }
     }
 
@@ -100,14 +93,20 @@ class ProbeTailerImpl implements ProbeTailer
     {
         var fromStartTailer = chronicleTailer.toStart();
         currentBatchContext = fromStartTailer.readingDocument();
+        batchBytes.clear();
 
         while (thereIsSomethingToRead(fromStartTailer))
         {
-            while (hasBatchedSomeData())
-            {
-                probeAccess.readProbeInto(batchBytes, probe);
-                tailer.onProbe(probe);
-            }
+            readProbesFromBatchBytes();
+        }
+    }
+
+    private void readProbesFromBatchBytes()
+    {
+        while (hasBatchedSomeData())
+        {
+            probeAccess.readProbeInto(batchBytes, probe);
+            tailer.onProbe(probe);
         }
     }
 
@@ -129,7 +128,7 @@ class ProbeTailerImpl implements ProbeTailer
                     return false;
             }
 
-            long len = Math.min(batchBytes.writeRemaining(), bytes.readRemaining());
+            long len = bytes.readRemaining();
             batchBytes.write(bytes, bytes.readPosition(), len);
             bytes.readSkip(len);
         }
@@ -139,6 +138,7 @@ class ProbeTailerImpl implements ProbeTailer
     @Override
     public void close()
     {
+        readProbesFromBatchBytes();
         currentBatchContext.close();
         chronicleQueue.close();
         tailer.onClose();
@@ -151,11 +151,30 @@ class ProbeTailerImpl implements ProbeTailer
             return 0;
 
         var currentIndex = chronicleTailer.index();
-        var lastIndex = chronicleQueue.createTailer().toEnd().index();
-        var batches = chronicleQueue.countExcerpts(currentIndex, lastIndex) - 1;
+        ExcerptTailer excerptTailer = chronicleQueue.createTailer().toEnd();
+        var lastIndex = excerptTailer.index();
+        excerptTailer.moveToIndex(lastIndex - 1);
+
         tryToFigureOutPerBatchProbes();
 
-        return batches * perBatchProbes + countProbes(batchBytes) + countCurrentContextProbes();
+        var batches = chronicleQueue.countExcerpts(currentIndex, lastIndex);
+        long batchedProbes = batches * perBatchProbes - perBatchProbes + countProbesLinearly(excerptTailer.readingDocument().wire().bytes());
+
+        return batchedProbes - ((batchBytes.readLimit() - batchBytes.readRemaining()) / PROBE_SIZE);
+
+    }
+
+    private long countProbesLinearly(Bytes<?> bytes)
+    {
+        var probes = 0;
+        for (long i = bytes.readPosition(); i < bytes.readLimit(); i += PROBE_SIZE)
+        {
+            if (bytes.readLong(i) == 0)
+                break;
+
+            probes++;
+        }
+        return probes;
     }
 
     private boolean contextNotPresent(ExcerptTailer chronicleTailer)
@@ -178,14 +197,6 @@ class ProbeTailerImpl implements ProbeTailer
                 perBatchProbes = countProbes(wire.bytes());
             }
         }
-    }
-
-    private long countCurrentContextProbes()
-    {
-        var wire = currentBatchContext.wire();
-        if (wire == null)
-            return 0;
-        return countProbes(wire.bytes());
     }
 
     private long countProbes(Bytes<?> bytes)

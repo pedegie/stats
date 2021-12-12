@@ -10,6 +10,6 @@ class TestTailer implements Tailer
     @Override
     void onProbe(Probe probe)
     {
-        probes.add(probe)
+        probes.add(probe.copyForStore())
     }
 }

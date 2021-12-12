@@ -4,11 +4,13 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 @Setter
 @Getter
 @AllArgsConstructor
 @NoArgsConstructor
+@ToString
 public class ProbeHolder implements Probe
 {
     public static final int PROBE_SIZE = 12;

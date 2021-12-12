@@ -399,9 +399,11 @@ probeTailer.readFromStart();  // read all probes from beginning
 probeTailer.probes();         // returns available probes to read
 probeTailer.close();          // close tailer
 ```
-`TailerConfiguration` takes **probeAccess**, **mmapSize** and **batchSize** parameters described above.
-The only difference is there is no `flushMillisThreshold` for batching configuration because it makes
-no sense here as there isn't any flushing mechanic. `batchSize` determines how often page fault can happen.
+`TailerConfiguration` takes **probeAccess** and **mmapSize** parameters described above.
+`ProbeTailer` reads probes in batches of size equal to `batchSize` of writer side.  If you set
+`QueueConguration.batchSize` to 100 it means that every `ProbeTailer` reading this file will read in batches
+equal of 100.
+
 Let's say there is already 30 batched probes and `read(50)` is invoked. It takes 30 probes from batch `Bytes`
 then it asks *memory mapped file* for next 50 probes, it takes as much as there is up to 50 and continue
 reading from next batch `Bytes` slice.
