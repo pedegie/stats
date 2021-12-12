@@ -385,6 +385,7 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
         }
     }
 
+    @Override
     public boolean batchFlush()
     {
         if (stateUpdater.intoBusy())

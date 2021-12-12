@@ -10,14 +10,14 @@ class DefaultProbeAccess implements ProbeAccess
     @Override
     public void writeProbe(BytesOut<?> mmapedFile, int count, long timestamp)
     {
-        mmapedFile.writeInt(count);
         mmapedFile.writeLong(timestamp);
+        mmapedFile.writeInt(count);
     }
 
     @Override
     public void readProbeInto(BytesIn<?> mmapedFile, ProbeHolder probe)
     {
-        probe.setCount(mmapedFile.readInt());
         probe.setTimestamp(mmapedFile.readLong());
+        probe.setCount(mmapedFile.readInt());
     }
 }
