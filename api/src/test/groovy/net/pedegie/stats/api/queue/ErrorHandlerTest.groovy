@@ -35,14 +35,14 @@ class ErrorHandlerTest extends Specification
                         int written = 0
 
                         @Override
-                        void writeProbe(BytesOut<?> mmapedFile, int count, long timestamp)
+                        void writeProbe(BytesOut<?> batchBytes, int count, long timestamp)
                         {
                             if (++written == 1)
                                 throw new TestExpectedException()
                         }
 
                         @Override
-                        void readProbeInto(BytesIn<?> mmapedFile, ProbeHolder probe)
+                        void readProbeInto(BytesIn<?> batchBytes, ProbeHolder probe)
                         {
 
                         }
@@ -97,17 +97,17 @@ class ErrorHandlerTest extends Specification
                         int written = 0
 
                         @Override
-                        void writeProbe(BytesOut<?> mmapedFile, int count, long timestamp)
+                        void writeProbe(BytesOut<?> batchBytes, int count, long timestamp)
                         {
                             if (++written == 1)
                                 throw new TestExpectedException()
 
-                            mmapedFile.writeInt(count)
-                            mmapedFile.writeLong(timestamp)
+                            batchBytes.writeInt(count)
+                            batchBytes.writeLong(timestamp)
                         }
 
                         @Override
-                        void readProbeInto(BytesIn<?> mmapedFile, ProbeHolder probe)
+                        void readProbeInto(BytesIn<?> batchBytes, ProbeHolder probe)
                         {
 
                         }
@@ -142,17 +142,17 @@ class ErrorHandlerTest extends Specification
                         int written = 0
 
                         @Override
-                        void writeProbe(BytesOut<?> mmapedFile, int count, long timestamp)
+                        void writeProbe(BytesOut<?> batchBytes, int count, long timestamp)
                         {
                             if (++written == 1)
                                 throw new TestExpectedException()
 
-                            mmapedFile.writeInt(count)
-                            mmapedFile.writeLong(timestamp)
+                            batchBytes.writeInt(count)
+                            batchBytes.writeLong(timestamp)
                         }
 
                         @Override
-                        void readProbeInto(BytesIn<?> mmapedFile, ProbeHolder probe)
+                        void readProbeInto(BytesIn<?> batchBytes, ProbeHolder probe)
                         {
 
                         }

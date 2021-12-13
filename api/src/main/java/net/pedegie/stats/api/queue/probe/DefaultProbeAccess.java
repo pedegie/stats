@@ -8,16 +8,16 @@ class DefaultProbeAccess implements ProbeAccess
     public static final DefaultProbeAccess INSTANCE = new DefaultProbeAccess();
 
     @Override
-    public void writeProbe(BytesOut<?> mmapedFile, int count, long timestamp)
+    public void writeProbe(BytesOut<?> batchBytes, int count, long timestamp)
     {
-        mmapedFile.writeLong(timestamp);
-        mmapedFile.writeInt(count);
+        batchBytes.writeLong(timestamp);
+        batchBytes.writeInt(count);
     }
 
     @Override
-    public void readProbeInto(BytesIn<?> mmapedFile, ProbeHolder probe)
+    public void readProbeInto(BytesIn<?> batchBytes, ProbeHolder probe)
     {
-        probe.setTimestamp(mmapedFile.readLong());
-        probe.setCount(mmapedFile.readInt());
+        probe.setTimestamp(batchBytes.readLong());
+        probe.setCount(batchBytes.readInt());
     }
 }

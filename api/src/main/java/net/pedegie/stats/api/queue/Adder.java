@@ -9,6 +9,4 @@ interface Adder
     void add(long size);
 
     int intValue();
-
-    long sum();
 }
