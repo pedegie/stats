@@ -63,12 +63,6 @@ enum Synchronizer
         {
             return (int) counter;
         }
-
-        @Override
-        public long sum()
-        {
-            return counter;
-        }
     }
 
     private static class NonConcurrentStateUpdater implements StateUpdater
