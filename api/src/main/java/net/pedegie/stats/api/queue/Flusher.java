@@ -24,8 +24,6 @@ class Flusher implements Runnable
     PriorityQueue<TimestampedFlushable> flushables = new PriorityQueue<>(Comparator.comparing(s -> s.flushTimestamp));
     AtomicReference<TimestampedFlushable> newFlushable = new AtomicReference<>();
     AtomicBoolean pausing = new AtomicBoolean();
-    @NonFinal
-    boolean newHandler;
 
     public Flusher()
     {
@@ -44,7 +42,7 @@ class Flusher implements Runnable
     public void addFlushable(BatchFlushable flushable)
     {
         TimestampedFlushable timestampedFlushable = new TimestampedFlushable(flushable);
-        if (flusherThread == null || flusherThread == Thread.currentThread())
+        if (flusherNotStartedYet() || flusherThread == Thread.currentThread())
         {
             flushables.add(timestampedFlushable);
             return;
@@ -52,10 +50,14 @@ class Flusher implements Runnable
 
         do
         {
-            newHandler = true;
             unpause();
         } while (isRunning.get() && !newFlushable.compareAndSet(null, timestampedFlushable));
 
+    }
+
+    private boolean flusherNotStartedYet()
+    {
+        return flusherThread == null;
     }
 
     public boolean start()
@@ -93,7 +95,7 @@ class Flusher implements Runnable
             if (flushable == null && !acceptNewFlushable())
                 pause();
 
-            if (flushable == null) // spurious wakeup or closing flusher, continue to make decision
+            if (flushable == null) // spurious wakeup, accepted new flushable or closing flusher, continue to make decision
                 continue;
 
             if (flushable.batchFlushable.isClosed())
@@ -105,40 +107,29 @@ class Flusher implements Runnable
 
             if (waitMillis > 1 || --acceptFlushableModCount <= 0)
             {
+                flushables.add(flushable);
+
                 acceptFlushableModCount = ACCEPT_FLUSHABLE_MOD_COUNT;
-                if (newFlushable(flushable))
+                if (acceptNewFlushable())
                     continue;
-            }
 
-            pause(waitMillis);
+                pause(waitMillis);
 
-            if (newHandler)
+                if (System.currentTimeMillis() - currentTime < waitMillis)
+                    acceptNewFlushable();
+            } else
             {
-                newHandler = false;
-                if (newFlushable(flushable))
-                    continue;
+                boolean flushed = flush(flushable, nextFlushTimestamp);
+                if (flushed)
+                    flushable.flushTimestamp = flushable.calculateNextFlushTimestamp();
+                else
+                    flushable.flushTimestamp = addLong(nextFlushTimestamp, flushable.batchFlushable.flushIntervalMillis());
+
+                flushables.add(flushable);
             }
-
-            boolean flushed = flush(flushable, nextFlushTimestamp);
-            if (flushed)
-                flushable.flushTimestamp = flushable.calculateNextFlushTimestamp();
-            else
-                flushable.flushTimestamp = addLong(nextFlushTimestamp, flushable.batchFlushable.flushIntervalMillis());
-
-            flushables.add(flushable);
         }
 
         flushables.clear();
-    }
-
-    private boolean newFlushable(TimestampedFlushable flushable)
-    {
-        if (acceptNewFlushable())
-        {
-            flushables.add(flushable);
-            return true;
-        }
-        return false;
     }
 
     private boolean acceptNewFlushable()
