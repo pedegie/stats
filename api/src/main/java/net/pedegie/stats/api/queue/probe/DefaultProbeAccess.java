@@ -20,4 +20,10 @@ class DefaultProbeAccess implements ProbeAccess
         probe.setTimestamp(batchBytes.readLong());
         probe.setCount(batchBytes.readInt());
     }
+
+    @Override
+    public String toString()
+    {
+        return this.getClass().getName();
+    }
 }

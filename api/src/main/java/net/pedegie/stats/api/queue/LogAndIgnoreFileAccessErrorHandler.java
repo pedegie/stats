@@ -13,4 +13,10 @@ class LogAndIgnoreFileAccessErrorHandler implements FileAccessErrorHandler
         log.error("Error during probe write", throwable);
         return false;
     }
+
+    @Override
+    public String toString()
+    {
+        return this.getClass().getName();
+    }
 }

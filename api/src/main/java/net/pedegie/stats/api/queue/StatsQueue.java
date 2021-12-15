@@ -113,9 +113,15 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
                         "rollCycle: {}\n" +
                         "disableCompression: {}\n" +
                         "disableSynchronization: {}\n" +
-                        "preTouchEnabled: {}",
+                        "preTouchEnabled: {}\n" +
+                        "writeFilter: {}\n" +
+                        "errorHandler: {}\n" +
+                        "probeAccess: {}\n" +
+                        "writeThreshold: {}\n" +
+                        "batching: {}",
                 conf.getPath(), conf.getMmapSize(), conf.getRollCycle(),
-                conf.isDisableCompression(), conf.isDisableSynchronization(), conf.isPreTouch());
+                conf.isDisableCompression(), conf.isDisableSynchronization(), conf.isPreTouch(), conf.getWriteFilter(),
+                conf.getErrorHandler(), conf.getProbeAccess(), conf.getWriteThreshold(), conf.getBatching());
     }
 
     public static <T> StatsQueue<T> queue(Queue<T> queue, QueueConfiguration queueConfiguration)
