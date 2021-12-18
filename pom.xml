@@ -18,7 +18,6 @@
     <modules>
         <module>api</module>
         <module>jmh</module>
-        <module>sb</module>
         <module>tailer_prometheus</module>
         <module>integration_tests</module>
     </modules>
