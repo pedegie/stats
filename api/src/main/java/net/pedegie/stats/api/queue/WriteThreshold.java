@@ -3,11 +3,13 @@ package net.pedegie.stats.api.queue;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.FieldDefaults;
 
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @Getter
+@ToString
 public class WriteThreshold
 {
     private static final long DEFAULT_DELAY_MILLIS = 5000;
