@@ -172,6 +172,7 @@ class ProbeTailerImpl implements ProbeTailer
         long bytes = 0;
         long lastBatchBytes = 0;
 
+        // count all written bytes
         while (true)
         {
             try (DocumentContext dc = excerptTailer.readingDocument())
@@ -186,9 +187,12 @@ class ProbeTailerImpl implements ProbeTailer
                 }
             }
         }
+        // substract the last batch bytes, because there is no guarantee it was fully written
         long probes = (bytes - lastBatchBytes) / PROBE_SIZE;
+        // count last batch probes linearly, checking if its really fully written or not
         excerptTailer.moveToIndex(excerptTailer.index() - 1);
         probes += countProbesLinearly(excerptTailer.readingDocument().wire().bytes());
+        // substract already read probes
         probes -= ((batchBytes.readLimit() - batchBytes.readRemaining()) / PROBE_SIZE);
 
         return probes;
