@@ -5,6 +5,8 @@ import net.pedegie.stats.api.tailer.ProbeTailer
 import net.pedegie.stats.api.tailer.TailerConfiguration
 import spock.lang.Specification
 
+import static net.pedegie.stats.api.tailer.ProbeTailerTest.writeElementsTo
+
 class CountProbesTest extends Specification
 {
     def setup()
@@ -178,5 +180,28 @@ class CountProbesTest extends Specification
             queue.close()
         then: "it contains 2 probes, because of close() always put additional probe to file"
             probeTailer.probes() == 2
+    }
+
+    def "should correctly count probes for different batch sizes on write side"()
+    {
+        given:
+            writeElementsTo(5, TestQueueUtil.PATH, 1)
+            writeElementsTo(5, TestQueueUtil.PATH, 5)
+            writeElementsTo(5, TestQueueUtil.PATH, 7)
+            writeElementsTo(7, TestQueueUtil.PATH, 7)
+
+            TestTailer testTailer = new TestTailer()
+            TailerConfiguration tailerConfiguration = TailerConfiguration.builder()
+                    .tailer(testTailer)
+                    .path(TestQueueUtil.PATH)
+                    .build()
+
+            ProbeTailer probeTailer = ProbeTailer.from(tailerConfiguration)
+        when:
+            long probes = probeTailer.probes()
+        then:
+            probes == 22
+        cleanup:
+            probeTailer.close()
     }
 }
