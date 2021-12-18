@@ -48,25 +48,6 @@ into multiple parts separated by thread pools. What if we could get notification
 easy to point then **this** part of system is overload additionally with real-time monitoring we can just prevent
 overloads by taking some actions **before** system becomes unresponsive or in the worst case crash.
 
-Another situation is: system failure - client says that something is going wrong, lets say users cannot log in to site,
-and we don't see any errors or other team within our company complains that sometimes they get disconnects from our service
-with no reason - these problems are really hard to diagnose when it just slowdowns without any explicit reason.  
-
-Typically, in kind of these problems we dive into investigating our machine - checking RAM, CPU, network,
-file descriptors, thread dumps, it may be necessary to run some tracing / profiling tools too - which is not always
-the case especially in production environments. If we think about it a little more - we do it all in one reason: link
-hardware problems to source code, then we can determine what the problem is and
-propose solution. For example our outbound network interface is overloaded, by continuously sending huge packages what
-shouldn't happen, we can use tools like `bpftrace` to capture packages with corresponding size, find port and
-process related to it, then try to resolve a stacktrace in hope we get into right place in source code, or
-high CPU usage because of our GC is taking all CPU time performing full GCs, memory dump confirms there is a lot of
-`byte[]` arrays with given size, we can then look for these sizes in our app, but it's usually not that simple and
-in the best case time-consuming. The real problem is that on hardware / OS level we don't know anything
-about application logic - so we spend most time for linking one to the other. In both cases there is a chance
-we can find problem just looking for saturated thread pools, in first case it would be some pool of network client
-which continuously sends requests, for further case maybe a lot of messages waits on our `Queue` because consumer isn't
-fast enough.
-
 I need variance not just average - information that there is on average 100 000 elements in queue per hour is
 not enough, we can omit peaks, what if there was peak 95 000 elements in first minute of hour? Without this information
 we cannot really find the problem in case of system slowdown / failure when peaks are overlooked. **Stats** records
