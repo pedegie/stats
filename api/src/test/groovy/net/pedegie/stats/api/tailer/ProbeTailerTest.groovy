@@ -1,12 +1,18 @@
 package net.pedegie.stats.api.tailer
 
+import net.openhft.chronicle.bytes.BytesIn
+import net.openhft.chronicle.bytes.BytesOut
 import net.openhft.chronicle.core.OS
 import net.pedegie.stats.api.queue.Batching
 import net.pedegie.stats.api.queue.FileUtils
 import net.pedegie.stats.api.queue.QueueConfiguration
 import net.pedegie.stats.api.queue.StatsQueue
+import net.pedegie.stats.api.queue.TestExpectedException
 import net.pedegie.stats.api.queue.TestQueueUtil
 import net.pedegie.stats.api.queue.TestTailer
+import net.pedegie.stats.api.queue.probe.Probe
+import net.pedegie.stats.api.queue.probe.ProbeAccess
+import net.pedegie.stats.api.queue.probe.ProbeHolder
 import spock.lang.Specification
 
 import java.nio.file.Path
@@ -366,6 +372,135 @@ class ProbeTailerTest extends Specification
             tailer.probes.size() == 30
     }
 
+    def "should be able to continue reading probes if error throws within ProbeAccess during read[]"()
+    {
+        given:
+            writeElementsTo(10, TestQueueUtil.PATH)
+            TestTailer tailer = new TestTailer()
+            TailerConfiguration configuration = TailerConfiguration.builder()
+                    .tailer(tailer)
+                    .probeAccess(new ThrowOnReadProbeAccess(1))
+                    .path(TestQueueUtil.PATH)
+                    .build()
+            ProbeTailer probeTailer = ProbeTailer.from(configuration)
+        when:
+            probeTailer.read()
+        then:
+            tailer.probes.size() == 10
+        cleanup:
+            probeTailer.close()
+    }
+
+    def "should be able to continue reading probes if error throws within ProbeAccess during read[n]"()
+    {
+        given:
+            writeElementsTo(10, TestQueueUtil.PATH)
+            TestTailer tailer = new TestTailer()
+            TailerConfiguration configuration = TailerConfiguration.builder()
+                    .tailer(tailer)
+                    .probeAccess(new ThrowOnReadProbeAccess(1))
+                    .path(TestQueueUtil.PATH)
+                    .build()
+            ProbeTailer probeTailer = ProbeTailer.from(configuration)
+        when:
+            probeTailer.read(10)
+        then:
+            tailer.probes.size() == 10
+        cleanup:
+            probeTailer.close()
+    }
+
+    def "should be able to continue reading probes if error throws within ProbeAccess during readFromStart[]"()
+    {
+        given:
+            writeElementsTo(10, TestQueueUtil.PATH)
+            TestTailer tailer = new TestTailer()
+            TailerConfiguration configuration = TailerConfiguration.builder()
+                    .tailer(tailer)
+                    .probeAccess(new ThrowOnReadProbeAccess(1))
+                    .path(TestQueueUtil.PATH)
+                    .build()
+            ProbeTailer probeTailer = ProbeTailer.from(configuration)
+        when:
+            probeTailer.readFromStart()
+        then:
+            tailer.probes.size() == 10
+        cleanup:
+            probeTailer.close()
+    }
+
+    def "should be able to continue reading probes if error throws within Tailer during read[]"()
+    {
+        given:
+            writeElementsTo(10, TestQueueUtil.PATH)
+            ThrowOnReadTailer tailer = new ThrowOnReadTailer(1)
+            TailerConfiguration configuration = TailerConfiguration.builder()
+                    .tailer(tailer)
+                    .path(TestQueueUtil.PATH)
+                    .build()
+            ProbeTailer probeTailer = ProbeTailer.from(configuration)
+        when:
+            probeTailer.read()
+        then:
+            tailer.probes.size() == 10
+        cleanup:
+            probeTailer.close()
+    }
+
+    def "should be able to continue reading probes if error throws within Tailer during read[n]"()
+    {
+        given:
+            writeElementsTo(10, TestQueueUtil.PATH)
+            ThrowOnReadTailer tailer = new ThrowOnReadTailer(1)
+            TailerConfiguration configuration = TailerConfiguration.builder()
+                    .tailer(tailer)
+                    .path(TestQueueUtil.PATH)
+                    .build()
+            ProbeTailer probeTailer = ProbeTailer.from(configuration)
+        when:
+            probeTailer.read(10)
+        then:
+            tailer.probes.size() == 10
+        cleanup:
+            probeTailer.close()
+    }
+
+    def "should be able to continue reading probes if error throws within Tailer during readFromStart[]"()
+    {
+        given:
+            writeElementsTo(10, TestQueueUtil.PATH)
+            ThrowOnReadTailer tailer = new ThrowOnReadTailer(1)
+            TailerConfiguration configuration = TailerConfiguration.builder()
+                    .tailer(tailer)
+                    .path(TestQueueUtil.PATH)
+                    .build()
+            ProbeTailer probeTailer = ProbeTailer.from(configuration)
+        when:
+            probeTailer.readFromStart()
+        then:
+            tailer.probes.size() == 10
+        cleanup:
+            probeTailer.close()
+    }
+
+    def "closing probe tailer should be idempotent"()
+    {
+        given:
+            writeElementsTo(10, TestQueueUtil.PATH)
+            TestTailer tailer = new TestTailer()
+            TailerConfiguration configuration = TailerConfiguration.builder()
+                    .tailer(tailer)
+                    .path(TestQueueUtil.PATH)
+                    .build()
+            ProbeTailer probeTailer = ProbeTailer.from(configuration)
+            probeTailer.read(2)
+        when:
+            probeTailer.close()
+            probeTailer.close()
+        then:
+            noExceptionThrown()
+    }
+
     static void writeElementsTo(int elements, Path path)
     {
         writeElementsTo(elements, path, 3)
@@ -382,5 +517,52 @@ class ProbeTailerTest extends Specification
 
         (2..elements).forEach({ queue.add(it) })
         queue.close()
+    }
+
+    private static class ThrowOnReadProbeAccess implements ProbeAccess
+    {
+        private final int throwOn
+        private int readProbes = 0
+
+        ThrowOnReadProbeAccess(int throwOn)
+        {
+            this.throwOn = throwOn
+        }
+
+        @Override
+        void writeProbe(BytesOut<?> batchBytes, int count, long timestamp)
+        {
+
+        }
+
+        @Override
+        void readProbeInto(BytesIn<?> batchBytes, ProbeHolder probe)
+        {
+            if (++readProbes == throwOn)
+                throw new TestExpectedException()
+
+            probe.setTimestamp(batchBytes.readLong())
+            probe.setCount(batchBytes.readInt())
+        }
+    }
+
+    private static class ThrowOnReadTailer extends TestTailer
+    {
+        private final int throwOn
+        private int readProbes = 0
+
+        ThrowOnReadTailer(int throwOn)
+        {
+            this.throwOn = throwOn
+        }
+
+        @Override
+        void onProbe(Probe probe)
+        {
+            if (++readProbes == throwOn)
+                throw new TestExpectedException()
+
+            super.onProbe(probe)
+        }
     }
 }

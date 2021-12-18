@@ -1,9 +1,9 @@
 package net.pedegie.stats.api.tailer;
 
 import lombok.AccessLevel;
-import lombok.Getter;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
+import lombok.extern.slf4j.Slf4j;
 import net.openhft.chronicle.bytes.Bytes;
 import net.openhft.chronicle.queue.ExcerptTailer;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
@@ -15,9 +15,9 @@ import net.pedegie.stats.api.queue.probe.ProbeHolder;
 import static net.pedegie.stats.api.queue.probe.ProbeHolder.PROBE_SIZE;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@Slf4j
 class ProbeTailerImpl implements ProbeTailer
 {
-    @Getter
     Tailer tailer;
     SingleChronicleQueue chronicleQueue;
     ExcerptTailer chronicleTailer;
@@ -67,9 +67,8 @@ class ProbeTailerImpl implements ProbeTailer
     {
         while (amount > 0 && hasBatchedSomeData())
         {
-            probeAccess.readProbeInto(batchBytes, probe);
-            tailer.onProbe(probe);
-            amount--;
+            if (readSingleProbe())
+                amount--;
         }
         return amount;
     }
@@ -105,8 +104,24 @@ class ProbeTailerImpl implements ProbeTailer
     {
         while (hasBatchedSomeData())
         {
+            readSingleProbe();
+        }
+    }
+
+    private boolean readSingleProbe()
+    {
+        var readPosition = batchBytes.readPosition();
+
+        try
+        {
             probeAccess.readProbeInto(batchBytes, probe);
             tailer.onProbe(probe);
+            return true;
+        } catch (Exception e)
+        {
+            batchBytes.readPosition(readPosition);
+            log.error("Error during reading probe.", e);
+            return false;
         }
     }
 

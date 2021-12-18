@@ -1,25 +1,28 @@
 package net.pedegie.stats.api.tailer;
 
-import lombok.SneakyThrows;
+import lombok.AccessLevel;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import net.openhft.chronicle.core.threads.HandlerPriority;
 import net.openhft.chronicle.threads.MediumEventLoop;
 import net.openhft.chronicle.threads.Pauser;
 import net.openhft.chronicle.threads.VanillaEventLoop;
 
-import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
+@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@Slf4j
 public class ProbeTailerScheduler
 {
     private static final int DEFAULT_PROBES_READ_ON_SINGLE_ACTION = 50;
     private static final int DEFAULT_THREADS = 1;
 
-    private final List<ProbeTailer> tailers = new ArrayList<>(16);
-
-    private final int probeReadOnSingleAction;
-    private final MediumEventLoop[] threadLoops;
-    int roundRobinIndex = 0;
+    CopyOnWriteArrayList<ProbeTailer> tailers = new CopyOnWriteArrayList<>();
+    int probeReadOnSingleAction;
+    MediumEventLoop[] threadLoops;
+    AtomicInteger roundRobinIndex = new AtomicInteger();
 
     private ProbeTailerScheduler(int threads, int probeReadOnSingleAction)
     {
@@ -42,7 +45,7 @@ public class ProbeTailerScheduler
 
     public void addTailer(ProbeTailer tailer)
     {
-        threadLoops[roundRobinIndex++ % threadLoops.length].addHandler(() -> tailer.read(probeReadOnSingleAction));
+        threadLoops[roundRobinIndex.getAndIncrement() % threadLoops.length].addHandler(() -> tailer.read(probeReadOnSingleAction));
         tailers.add(tailer);
     }
 
@@ -56,10 +59,15 @@ public class ProbeTailerScheduler
         tailers.forEach(this::close);
     }
 
-    @SneakyThrows
     private void close(ProbeTailer tailer)
     {
-        tailer.close();
+        try
+        {
+            tailer.close();
+        } catch (Exception e)
+        {
+            log.error("Error during closing ProbeTailer", e);
+        }
     }
 
     public static ProbeTailerScheduler create()

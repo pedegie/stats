@@ -3,6 +3,7 @@ package net.pedegie.stats.api.queue;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Comparator;
 import java.util.PriorityQueue;
@@ -11,6 +12,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@Slf4j
 class Flusher implements Runnable
 {
     private static final int ACCEPT_FLUSHABLE_MOD_COUNT = 32;
@@ -53,6 +55,7 @@ class Flusher implements Runnable
             unpause();
         } while (isRunning.get() && !newFlushable.compareAndSet(null, timestampedFlushable));
 
+        unpause();
     }
 
     private boolean flusherNotStartedYet()
@@ -97,35 +100,48 @@ class Flusher implements Runnable
 
             if (flushable == null) // spurious wakeup, accepted new flushable or closing flusher, continue to make decision
                 continue;
-
-            if (flushable.batchFlushable.isClosed())
-                continue;
-
-            var currentTime = System.currentTimeMillis();
-            var nextFlushTimestamp = flushable.calculateNextFlushTimestamp();
-            var waitMillis = nextFlushTimestamp - currentTime;
-
-            if (waitMillis > 1 || --acceptFlushableModCount <= 0)
+            try
             {
-                flushables.add(flushable);
-
-                acceptFlushableModCount = ACCEPT_FLUSHABLE_MOD_COUNT;
-                if (acceptNewFlushable())
+                if (flushable.batchFlushable.isClosed())
                     continue;
 
-                pause(waitMillis);
+                var currentTime = System.currentTimeMillis();
+                var nextFlushTimestamp = flushable.calculateNextFlushTimestamp();
+                var waitMillis = nextFlushTimestamp - currentTime;
 
-                if (System.currentTimeMillis() - currentTime < waitMillis)
-                    acceptNewFlushable();
-            } else
+                if (waitMillis > 1 || --acceptFlushableModCount <= 0)
+                {
+                    flushables.add(flushable);
+
+                    acceptFlushableModCount = ACCEPT_FLUSHABLE_MOD_COUNT;
+                    if (acceptNewFlushable())
+                        continue;
+
+                    pause(waitMillis);
+
+                    if (System.currentTimeMillis() - currentTime < waitMillis)
+                        acceptNewFlushable();
+                } else
+                {
+                    boolean flushed = flush(flushable, nextFlushTimestamp);
+                    if (flushed)
+                        flushable.flushTimestamp = flushable.calculateNextFlushTimestamp();
+                    else
+                        flushable.flushTimestamp = addLong(nextFlushTimestamp, flushable.batchFlushable.flushIntervalMillis());
+
+                    flushables.add(flushable);
+                }
+            } catch (Exception e)
             {
-                boolean flushed = flush(flushable, nextFlushTimestamp);
-                if (flushed)
-                    flushable.flushTimestamp = flushable.calculateNextFlushTimestamp();
-                else
-                    flushable.flushTimestamp = addLong(nextFlushTimestamp, flushable.batchFlushable.flushIntervalMillis());
-
-                flushables.add(flushable);
+                log.error("Error during flushing. Postponing flushable to next interval.", e);
+                try
+                {
+                    flushable.flushTimestamp = addLong(System.currentTimeMillis(), flushable.batchFlushable.flushIntervalMillis());
+                    flushables.add(flushable);
+                } catch (Exception ex)
+                {
+                    log.error("Error during calculation of next flush timestamp. Flushable is removed from scheduling!");
+                }
             }
         }
 

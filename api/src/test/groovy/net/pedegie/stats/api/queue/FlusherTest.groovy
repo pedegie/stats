@@ -3,6 +3,7 @@ package net.pedegie.stats.api.queue
 import spock.lang.Specification
 
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class FlusherTest extends Specification
 {
@@ -146,6 +147,22 @@ class FlusherTest extends Specification
         then:
             flushed
             TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) > 190
+        cleanup:
+            flusher.stop()
+    }
+
+    def "should continue flushing if error happens during flushing flushable"()
+    {
+        given:
+            Flusher flusher = new Flusher()
+            flusher.start()
+            TestFlushable flushable = Spy(TestFlushable, constructorArgs: [100L])
+            AtomicInteger invokedFlushTimes = new AtomicInteger()
+            flushable.batchFlush() >> { invokedFlushTimes.incrementAndGet(); throw new TestExpectedException() }
+        when:
+            flusher.addFlushable(flushable)
+        then:
+            BusyWaiter.busyWaitMillis({ invokedFlushTimes.get() > 1 }, 5000, "waiting for flushes")
         cleanup:
             flusher.stop()
     }
