@@ -271,5 +271,6 @@ class BatchingTest extends Specification
             flushed
         cleanup:
             queue.close()
+            probeTailer.close()
     }
 }

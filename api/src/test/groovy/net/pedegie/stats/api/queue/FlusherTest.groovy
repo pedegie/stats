@@ -151,18 +151,6 @@ class FlusherTest extends Specification
             flusher.stop()
     }
 
-    def "should throw an exception if passed parameters are less than min values"()
-    {
-        given:
-            int maxTries = flushMaxTries
-        when:
-            new Flusher(maxTries)
-        then:
-            thrown(IllegalArgumentException)
-        where:
-            flushMaxTries << [0, -1]
-    }
-
     def "should continue flushing if error happens during flushing flushable"()
     {
         given:
@@ -174,9 +162,21 @@ class FlusherTest extends Specification
         when:
             flusher.addFlushable(flushable)
         then:
-            BusyWaiter.busyWaitMillis({ invokedFlushTimes.get() > 1 }, 1000, "asd")
+            BusyWaiter.busyWaitMillis({ invokedFlushTimes.get() > 1 }, 5000, "waiting for flushes")
         cleanup:
             flusher.stop()
+    }
+
+    def "should throw an exception if passed parameters are less than min values"()
+    {
+        given:
+            int maxTries = flushMaxTries
+        when:
+            new Flusher(maxTries)
+        then:
+            thrown(IllegalArgumentException)
+        where:
+            flushMaxTries << [0, -1]
     }
 
     private static class TestFlushable implements BatchFlushable
