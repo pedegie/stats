@@ -166,16 +166,32 @@ class ProbeTailerImpl implements ProbeTailer
             return 0;
 
         var currentIndex = chronicleTailer.index();
-        ExcerptTailer excerptTailer = chronicleQueue.createTailer().toEnd();
-        var lastIndex = excerptTailer.index();
-        excerptTailer.moveToIndex(lastIndex - 1);
+        ExcerptTailer excerptTailer = chronicleQueue.createTailer();
+        excerptTailer.moveToIndex(currentIndex);
 
-        tryToFigureOutPerBatchProbes();
+        long bytes = 0;
+        long lastBatchBytes = 0;
 
-        var batches = chronicleQueue.countExcerpts(currentIndex, lastIndex);
-        long batchedProbes = batches * perBatchProbes - perBatchProbes + countProbesLinearly(excerptTailer.readingDocument().wire().bytes());
+        while (true)
+        {
+            try (DocumentContext dc = excerptTailer.readingDocument())
+            {
+                if (dc.isPresent())
+                {
+                    lastBatchBytes = dc.wire().bytes().readRemaining();
+                    bytes += lastBatchBytes;
+                } else
+                {
+                    break;
+                }
+            }
+        }
+        long probes = (bytes - lastBatchBytes) / PROBE_SIZE;
+        excerptTailer.moveToIndex(excerptTailer.index() - 1);
+        probes += countProbesLinearly(excerptTailer.readingDocument().wire().bytes());
+        probes -= ((batchBytes.readLimit() - batchBytes.readRemaining()) / PROBE_SIZE);
 
-        return batchedProbes - ((batchBytes.readLimit() - batchBytes.readRemaining()) / PROBE_SIZE);
+        return probes;
 
     }
 
