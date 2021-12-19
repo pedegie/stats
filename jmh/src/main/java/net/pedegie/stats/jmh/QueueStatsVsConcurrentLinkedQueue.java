@@ -29,8 +29,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import static net.pedegie.stats.jmh.Benchmark.randomPath;
-import static net.pedegie.stats.jmh.Benchmark.runBenchmarkForQueue;
+import static net.pedegie.stats.jmh.BenchmarkUtils.randomPath;
+import static net.pedegie.stats.jmh.BenchmarkUtils.runBenchmarkForQueue;
 
 public class QueueStatsVsConcurrentLinkedQueue
 {
@@ -85,9 +85,9 @@ public class QueueStatsVsConcurrentLinkedQueue
             @Setup(Level.Trial)
             public void setUp()
             {
-                producerThreadPool = Executors.newFixedThreadPool(threads, new net.pedegie.stats.jmh.Benchmark.NamedThreadFactory("producer_pool-%d"));
-                consumerThreadPool = Executors.newFixedThreadPool(threads, new net.pedegie.stats.jmh.Benchmark.NamedThreadFactory("consumer_pool-%d"));
-                FileUtils.cleanDirectory(net.pedegie.stats.jmh.Benchmark.testQueuePath.getParent());
+                producerThreadPool = Executors.newFixedThreadPool(threads, new BenchmarkUtils.NamedThreadFactory("producer_pool-%d"));
+                consumerThreadPool = Executors.newFixedThreadPool(threads, new BenchmarkUtils.NamedThreadFactory("consumer_pool-%d"));
+                FileUtils.cleanDirectory(BenchmarkUtils.testQueuePath.getParent());
                 var queueConfiguration = net.pedegie.stats.api.queue.QueueConfiguration.builder()
                         .path(randomPath())
                         .preTouch(true)
@@ -146,6 +146,4 @@ public class QueueStatsVsConcurrentLinkedQueue
                 .build();
         new Runner(options).run();
     }
-
-
 }

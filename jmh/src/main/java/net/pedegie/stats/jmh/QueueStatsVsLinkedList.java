@@ -28,7 +28,7 @@ import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import static net.pedegie.stats.jmh.Benchmark.randomPath;
+import static net.pedegie.stats.jmh.BenchmarkUtils.randomPath;
 
 public class QueueStatsVsLinkedList
 {
@@ -78,7 +78,7 @@ public class QueueStatsVsLinkedList
             @Setup(Level.Trial)
             public void setUp()
             {
-                FileUtils.cleanDirectory(net.pedegie.stats.jmh.Benchmark.testQueuePath);
+                FileUtils.cleanDirectory(BenchmarkUtils.testQueuePath);
                 var queueConfiguration = QueueConfiguration.builder()
                         .path(randomPath())
                         .preTouch(true)
