@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
-public class Benchmark
+public class BenchmarkUtils
 {
     private static final int POISON_PILL = -11;
 

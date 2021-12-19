@@ -340,11 +340,12 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
         if (tries == 5)
         {
             log.warn("Cannot write to queue after {} tries because of batch flusher still takes precedence. " +
-                    "Probe is dropped. Consider to increase 'QueueConfiguration.flushMillisThreshold' parameter " +
-                    "to allow normal writing to queue.", tries);
+                    "Probe is dropped. Consider to increase 'Batching.flushMillisThreshold' parameter " +
+                    "if flushing happens too often or decrease Batching.batchSize to allow normal writing to queue.", tries);
         } else
         {
             Jvm.safepoint();
+            BusyWaiter.busyWaitNanos(5);
             write(difference, tries + 1);
         }
     }
