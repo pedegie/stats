@@ -2,8 +2,6 @@
 
 **Stats** is Java collection tracing library. Stats allow monitoring yours `Collection`,`Map` and Thread Pools with zero-cost overhead.
 
-**ITS STILL UNDER DEVELOPMENT - NOT PRODUCTION READY YET**
-
 ## Table of contents
 
 - [Overview](#overview)
