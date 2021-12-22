@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 @Requires({ env.INTEGRATION_TESTS == 'true' })
 class PrometheusTest extends Specification
 {
-    private static final String PROMETHEUS_API = "http://prometheus:9090/api/v1"
+    private static final String PROMETHEUS_API = "http://localhost:9090/api/v1"
     private static final Path PATH = Paths.get(System.getProperty("java.io.tmpdir").toString(), "stats_queue", "stats_queue.log")
 
     def setup()
