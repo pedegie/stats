@@ -175,6 +175,8 @@ QueueConfiguration queueConfiguration = QueueConfiguration.builder()
         .build()
 ```
 #### rollCycle
+`QueueConfiguration.rollCycle()` should has the same value as `TailerConfiguration.rollCycle()`  
+
 See [RollCycle](https://github.com/OpenHFT/Chronicle-Queue#detailed-guide)  
 default: `RollCycles.DAILY`
 ```java
@@ -378,7 +380,7 @@ probeTailer.readFromStart();  // read all probes from beginning
 probeTailer.probes();         // returns available probes to read
 probeTailer.close();          // close tailer
 ```
-`TailerConfiguration` takes **probeAccess** and **mmapSize** parameters described above.
+`TailerConfiguration` takes **probeAccess**, **mmapSize** and **rollCycle** parameters described above.
 `ProbeTailer` reads probes in batches of size equal to `batchSize` of writer side.  If you set
 `QueueConguration.batchSize` to 100 it means that every `ProbeTailer` reading this file will read in batches
 equal of 100.
@@ -386,6 +388,11 @@ equal of 100.
 Let's say there is already 30 batched probes and `read(50)` is invoked. It takes 30 probes from batch `Bytes`
 then it asks *memory mapped file* for next 50 probes, it takes as much as there is up to 50 and continue
 reading from next batch `Bytes` slice.
+
+`TailerConfiguration.rollCycle()` should has the same value as `QueueConfiguration.rollCycle()`  
+
+See [RollCycle](https://github.com/OpenHFT/Chronicle-Queue#detailed-guide)  
+default: `RollCycles.DAILY`
 
 ### ProbeTailerScheduler
 Continuously reading probes written by **Stats** decorated `Map/Collection` requires to program some loop invoking `ProbeTailer`
