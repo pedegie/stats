@@ -6,6 +6,7 @@
 
 - [Overview](#overview)
 - [Motivation](#motivation)
+- [Downloading Stats](#downloading-stats)
 - [Architecture](#architecture)
     - [Zero-cost](#zero-cost)
 - [Implementation Details](#implementation-details)
