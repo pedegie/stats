@@ -40,6 +40,9 @@ public interface ProbeTailer extends Closeable
      * Sharing a {@code ProbeTailer} across threads is unsafe and will inevitably lead to errors and unspecified behaviour.
      * <p>
      * You can use it within {@link ProbeTailerScheduler}
+     *
+     * @param tailerConfiguration Probe Tailer Configuration
+     * @return {@code ProbeTailer}
      */
     static ProbeTailer from(TailerConfiguration tailerConfiguration)
     {
