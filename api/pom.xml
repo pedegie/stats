@@ -5,12 +5,15 @@
     <parent>
         <groupId>io.github.pedegie</groupId>
         <artifactId>stats</artifactId>
-        <version>1.0.0</version>
+        <version>1.1.0</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>api</artifactId>
-    <version>1.0.0</version>
+    <artifactId>stats-api</artifactId>
+    <version>1.1.0</version>
+    <packaging>jar</packaging>
+    <name>Pedegie/Stats-Api</name>
+    <description>Stats-Api</description>
 
     <dependencies>
         <dependency>
@@ -23,5 +26,4 @@
             <version>5.21.92</version>
         </dependency>
     </dependencies>
-
 </project>

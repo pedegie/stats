@@ -8,8 +8,8 @@ import io.github.pedegie.stats.api.queue.WriteThreshold
 import io.github.pedegie.stats.api.queue.probe.Probe
 import io.github.pedegie.stats.api.tailer.ProbeTailer
 import io.github.pedegie.stats.api.tailer.Tailer
-import net.openhft.chronicle.core.OS
 import io.github.pedegie.stats.api.tailer.TailerConfiguration
+import net.openhft.chronicle.core.OS
 import spock.lang.Specification
 
 import java.nio.file.Path
@@ -59,14 +59,14 @@ class ReadWriteProbes extends Specification
         when:
             probeTailer.read()
         then:
-            tailer.probesRead == 0
+            tailer.probes.size() == 0
         when:
             statsQueue.add(5)
             statsQueue.add(5)
             statsQueue.add(5)
         then:
             probeTailer.read()
-            tailer.probesRead == 3
+            tailer.probes.size() == 3
         cleanup:
             statsQueue.close()
             probeTailer.close()
@@ -99,7 +99,7 @@ class ReadWriteProbes extends Specification
             ProbeTailer probeTailer = ProbeTailer.from(tailerConfiguration)
             probeTailer.read()
         then:
-            tailer.probesRead == 3
+            tailer.probes.size() == 3
         cleanup:
             statsQueue.close()
             probeTailer.close()

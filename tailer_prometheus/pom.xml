@@ -6,46 +6,26 @@
     <parent>
         <groupId>io.github.pedegie</groupId>
         <artifactId>stats</artifactId>
-        <version>1.0.0</version>
+        <version>1.1.0</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>tailer_prometheus</artifactId>
-    <version>1.0.0</version>
-
-    <properties>
-        <prometheus.version>0.12.0</prometheus.version>
-    </properties>
+    <artifactId>stats-tailer-prometheus</artifactId>
+    <version>1.1.0</version>
+    <packaging>jar</packaging>
+    <name>Pedegie/Stats-Tailer-Prometheus</name>
+    <description>Stats-Tailer-Prometheus</description>
 
     <dependencies>
         <dependency>
             <groupId>io.github.pedegie</groupId>
-            <artifactId>api</artifactId>
+            <artifactId>stats-api</artifactId>
         </dependency>
-        <!-- The client -->
         <dependency>
             <groupId>io.prometheus</groupId>
             <artifactId>simpleclient</artifactId>
-            <version>${prometheus.version}</version>
-        </dependency>
-        <!-- Hotspot JVM metrics-->
-        <dependency>
-            <groupId>io.prometheus</groupId>
-            <artifactId>simpleclient_hotspot</artifactId>
-            <version>${prometheus.version}</version>
-        </dependency>
-        <!-- Exposition HTTPServer-->
-        <dependency>
-            <groupId>io.prometheus</groupId>
-            <artifactId>simpleclient_httpserver</artifactId>
-            <version>${prometheus.version}</version>
-        </dependency>
-        <!-- Pushgateway exposition-->
-        <dependency>
-            <groupId>io.prometheus</groupId>
-            <artifactId>simpleclient_pushgateway</artifactId>
-            <version>${prometheus.version}</version>
+            <version>0.14.1</version>
         </dependency>
     </dependencies>
 </project>

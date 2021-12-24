@@ -10,7 +10,7 @@ cache:
 merge_request:
   stage: test
   script:
-    - mvn test
+    - mvn test -Pdefault
   only:
     - merge_requests
 
@@ -23,6 +23,6 @@ master:
       alias: prometheus
   script:
     - export INTEGRATION_TESTS=false
-    - mvn test
+    - mvn test -Pdefault
   only:
     - master

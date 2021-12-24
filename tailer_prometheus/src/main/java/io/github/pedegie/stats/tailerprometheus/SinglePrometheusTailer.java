@@ -7,6 +7,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.Collections;
 import java.util.List;
@@ -28,13 +29,20 @@ class SinglePrometheusTailer extends Collector implements Tailer
     public void onProbe(Probe probe)
     {
         var timestamp = generateTimestampOnRequestReceive ? System.currentTimeMillis() : probe.getTimestamp();
-        sample = new MetricFamilySamples.Sample(source, emptyList(), emptyList(), probe.getCount(), timestamp);
+        sample = createSample(probe.getCount(), timestamp);
     }
 
     @Override
     public List<MetricFamilySamples> collect()
     {
-        return Collections.singletonList(new Collector.MetricFamilySamples(source, Type.GAUGE, "collection size", singletonList(sample)));
+        var sampleToReturn = sample == null ? createSample(0, System.currentTimeMillis()) : sample;
+        return Collections.singletonList(new Collector.MetricFamilySamples(source, Type.GAUGE, "collection size", singletonList(sampleToReturn)));
+    }
+
+    @NotNull
+    private MetricFamilySamples.Sample createSample(int count, long time)
+    {
+        return new MetricFamilySamples.Sample(source, emptyList(), emptyList(), count, time);
     }
 
     @Override
