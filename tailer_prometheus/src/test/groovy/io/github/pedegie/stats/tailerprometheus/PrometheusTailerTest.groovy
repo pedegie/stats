@@ -2,7 +2,6 @@ package io.github.pedegie.stats.tailerprometheus
 
 import io.github.pedegie.stats.api.tailer.ProbeTailer
 import io.github.pedegie.stats.api.tailer.TailerConfiguration
-import io.github.pedegie.stats.tailerprometheus.PrometheusTailer
 import spock.lang.Specification
 
 import java.nio.file.Path
@@ -17,13 +16,13 @@ class PrometheusTailerTest extends Specification
         given:
             String source = "source"
             TailerConfiguration tailerConfiguration = TailerConfiguration.builder()
-                    .tailer(PrometheusTailer.INSTANCE.newTailer(source))
+                    .tailer(PrometheusTailer.COLLECTOR.newTailer(source))
                     .path(PATH)
                     .build()
             ProbeTailer probeTailer = ProbeTailer.from(tailerConfiguration)
         when:
             probeTailer.close()
-            boolean removed = PrometheusTailer.INSTANCE.removeTailer(source)
+            boolean removed = PrometheusTailer.COLLECTOR.removeTailer(source)
         then: "tailer was removed during close, so it wasn't removed"
             !removed
     }
@@ -32,9 +31,9 @@ class PrometheusTailerTest extends Specification
     {
         given:
             String source = "source"
-            PrometheusTailer.INSTANCE.newTailer(source)
+            PrometheusTailer.COLLECTOR.newTailer(source)
         when:
-            PrometheusTailer.INSTANCE.newTailer(source)
+            PrometheusTailer.COLLECTOR.newTailer(source)
         then:
             thrown(IllegalStateException)
     }

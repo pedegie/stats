@@ -1,15 +1,15 @@
 package io.github.pedegie.stats.integrationtests
 
-import io.github.pedegie.stats.api.queue.StatsQueue
-import net.openhft.chronicle.core.OS
 import io.github.pedegie.stats.api.queue.BusyWaiter
 import io.github.pedegie.stats.api.queue.FileUtils
 import io.github.pedegie.stats.api.queue.QueueConfiguration
+import io.github.pedegie.stats.api.queue.StatsQueue
 import io.github.pedegie.stats.api.tailer.ProbeTailer
 import io.github.pedegie.stats.api.tailer.ProbeTailerScheduler
 import io.github.pedegie.stats.api.tailer.TailerConfiguration
 import io.github.pedegie.stats.integrationtests.prometheus.PrometheusHttpExporter
 import io.github.pedegie.stats.tailerprometheus.PrometheusTailer
+import net.openhft.chronicle.core.OS
 import spock.lang.Requires
 import spock.lang.Specification
 
@@ -45,6 +45,7 @@ class PrometheusTest extends Specification
 
             String tailer_name_1 = "test_tailer_1"
             String tailer_name_2 = "test_tailer_2"
+            String tailerWithoutProbes = "tailerWithoutProbes"
 
             TailerConfiguration configuration1 = TailerConfiguration.builder()
                     .tailer(prometheusTailer.newTailer(tailer_name_1))
@@ -55,6 +56,8 @@ class PrometheusTest extends Specification
                     .tailer(prometheusTailer.newTailer(tailer_name_2))
                     .path(pathQueue2)
                     .build()
+
+            prometheusTailer.newTailer(tailerWithoutProbes)
 
             ProbeTailer probeTailer1 = ProbeTailer.from(configuration1)
             ProbeTailer probeTailer2 = ProbeTailer.from(configuration2)
@@ -76,14 +79,23 @@ class PrometheusTest extends Specification
                     .GET()
                     .build()
 
+            HttpRequest request_3 = HttpRequest.newBuilder()
+                    .uri(new URI(PROMETHEUS_API + "/query?query=" + tailerWithoutProbes))
+                    .GET()
+                    .build()
+
             HttpResponse<String> response_1 = httpClient.send(request_1, HttpResponse.BodyHandlers.ofString())
             HttpResponse<String> response_2 = httpClient.send(request_2, HttpResponse.BodyHandlers.ofString())
+            HttpResponse<String> response_3 = httpClient.send(request_3, HttpResponse.BodyHandlers.ofString())
         then:
             response_1.statusCode() == 200
             response_1.body().contains("value")
 
             response_2.statusCode() == 200
             response_2.body().contains("value")
+
+            response_3.statusCode() == 200
+            response_3.body().contains("value")
         cleanup:
             scheduler.close()
             exporter.stopExportingStatistics()

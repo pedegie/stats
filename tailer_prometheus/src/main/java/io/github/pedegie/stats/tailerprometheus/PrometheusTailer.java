@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PrometheusTailer extends Collector
 {
-    public static final PrometheusTailer INSTANCE = new PrometheusTailer();
+    public static final PrometheusTailer COLLECTOR = new PrometheusTailer();
 
     private final ConcurrentHashMap<String, SinglePrometheusTailer> tailers = new ConcurrentHashMap<>();
 

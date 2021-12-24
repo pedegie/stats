@@ -63,6 +63,15 @@ interface?
 which makes **Stats** slower will be rejected - also all merge requests which proves with benchmarks that makes
 it faster without breaking functionality and extensibility - accepted.
 
+## Downloading Stats
+Releases are available on Maven Central as:
+```
+<dependency>
+    <groupId>io.github.pedegie</groupId>
+    <artifactId>stats-api</artifactId>
+    <version>1.1.0</version>
+</dependency>
+```
 ## Architecture
 **Stats** can be divided into two parts - write side which decorates `Map/Collection` is responsible for writing to file and
 read side which reads probes from file and publish data to monitoring tools. **Stats** is build on top of
@@ -623,26 +632,33 @@ throughput we may need configure `Batching` and `WriteThreshold`.
 
 ## Supported Monitoring Tools
 ### Prometheus
+```
+<dependency>
+    <groupId>io.github.pedegie</groupId>
+    <artifactId>stats-tailer-prometheus</artifactId>
+    <version>1.1.0</version>
+</dependency>
+```
 **Stats** provides `PrometheusTailer` for Prometheus monitoring system. In this section we will not explain how
 Prometheus work, you can read about this [here](https://prometheus.io/).
 
 Prometheus allows registering your own `Collector` which collects data exposed by HttpServer. `PrometheusTailer`
 extends `Collector` and allows for easy creating `Tailer` which is passed to `TailerConfiguration` as in examples
-above. You should create all `Tailer` instances using `PrometheusTailer.INSTANCE` which is registered as `Collector`.
+above. You should create all `Tailer` instances using `PrometheusTailer.COLLECTOR` which is registered as `Collector`.
 
 ```java
 // Create two tailers using PrometheusTailer and register them to scheduler, they will read probes from Path files
 
-String source = "source_1";
-String source = "source_2";
+String source1 = "source_1";
+String source2 = "source_2";
 
 TailerConfiguration tailerConfiguration1 = TailerConfiguration.builder()
-        .tailer(PrometheusTailer.INSTANCE.newTailer(source_1))
+        .tailer(PrometheusTailer.COLLECTOR.newTailer(source1))
         .path(Paths.get("probes_1.log"))
         .build();
 
 TailerConfiguration tailerConfiguration2 = TailerConfiguration.builder()
-        .tailer(PrometheusTailer.INSTANCE.newTailer(source_2))
+        .tailer(PrometheusTailer.COLLECTOR.newTailer(source2))
         .path(Paths.get("probes_2.log"))
         .build();
 
@@ -656,11 +672,11 @@ scheduler.addTailer(probeTailer2);
 // Setup Prometheus HttpServer and register collector
 
 CollectorRegistry registry = new CollectorRegistry(true);
-registry.register(collector);
+registry.register(PrometheusTailer.COLLECTOR);
       
 new HTTPServer.Builder()
         .withPort(1234)
-        .withRegistry(PrometheusTailer.INSTANCE)
+        .withRegistry(registry)
         .build();
 ```
 
