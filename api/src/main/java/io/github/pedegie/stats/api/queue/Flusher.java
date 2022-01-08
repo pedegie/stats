@@ -23,7 +23,7 @@ class Flusher implements Runnable
     volatile Thread flusherThread;
 
     AtomicBoolean isRunning = new AtomicBoolean();
-    PriorityQueue<TimestampedFlushable> flushables = new PriorityQueue<>(Comparator.comparing(s -> s.flushTimestamp));
+    PriorityQueue<TimestampedFlushable> flushables = new PriorityQueue<>(Comparator.comparingLong(s -> s.flushTimestamp));
     AtomicReference<TimestampedFlushable> newFlushable = new AtomicReference<>();
     AtomicBoolean pausing = new AtomicBoolean();
 
