@@ -1,7 +1,5 @@
 /*
 
------ UNCOMMENT AND THEN MAKE FLUSHER CLASS PUBLIC FOR BENCHMARKS ------
-
 package io.github.pedegie.stats.jmh.profiler.flusher;
 
 import io.github.pedegie.stats.api.queue.BatchFlushable;
