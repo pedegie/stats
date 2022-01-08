@@ -100,6 +100,7 @@ class Flusher implements Runnable
 
             if (flushable == null) // spurious wakeup, accepted new flushable or closing flusher, continue to make decision
                 continue;
+
             try
             {
                 if (flushable.batchFlushable.isClosed())
@@ -114,13 +115,8 @@ class Flusher implements Runnable
                     flushables.add(flushable);
 
                     acceptFlushableModCount = ACCEPT_FLUSHABLE_MOD_COUNT;
-                    if (acceptNewFlushable())
-                        continue;
-
                     pause(waitMillis);
-
-                    if (System.currentTimeMillis() - currentTime < waitMillis)
-                        acceptNewFlushable();
+                    acceptNewFlushable();
                 } else
                 {
                     boolean flushed = flush(flushable, nextFlushTimestamp);
