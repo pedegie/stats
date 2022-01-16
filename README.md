@@ -555,13 +555,12 @@ tool.
 ![async-profiler flame-graph](images/jmh.png "Flame-graph")
 - all batch writes happens during `poll()` - it's because of every n-th write equal to `batchSize` is always
   invoked during `poll()` but it doesn't matter.
-- 63% of overhead is because of `System.currentTimeMillis()`. Yes we are talking about that small overheads but
+- 72% of overhead is because of `System.currentTimeMillis()`. Yes we are talking about that small overheads but
   comparing to just simple `LinkedList.linkNode()` It's still relative big. We can't do much with this.
-- there is still 15% improvement space if we can pre-touch memory pages asynchronously
-- rest overheard is because of **Stats** `write` logic
+- most page fault are being done in background thread asynchronously
+- rest overheard is because of **Stats** logic
 
-It's just V1 version, in future releases I will implement some read-ahead mechanism and do my best to get the lowest
-overhead as possible. You can also consider increasing `WriteThreshold.minSizeDifference` to minimize write overhead.
+Consider increasing `WriteThreshold.minSizeDifference` to minimize write overhead.
 
 ### `QueueStats` vs `ConcurrentLinkedQueue` with delay between adds
 Here 1 thread means there is 1 producer and 1 consumer thread, 2 threads - 2 producer and 2 consumer

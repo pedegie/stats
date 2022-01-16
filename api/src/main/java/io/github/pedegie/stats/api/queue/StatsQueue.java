@@ -11,6 +11,7 @@ import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.queue.ExcerptAppender;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
+import net.openhft.chronicle.queue.internal.InternalPretouchHandler;
 import net.openhft.chronicle.wire.DocumentContext;
 import org.jetbrains.annotations.NotNull;
 
@@ -29,6 +30,7 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
 {
     private static final ConcurrentHashMap<String, Boolean> queues = new ConcurrentHashMap<>();
     private static final Flusher flusher = new Flusher();
+    private static final PretoucherThread pretoucherThread = new PretoucherThread();
 
     Queue<T> queue;
     WriteFilter writeFilter;
@@ -59,10 +61,14 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
     @SuppressWarnings("rawtypes")
     Bytes batchBytes;
 
+    static
+    {
+        System.setProperty("disable.thread.safety", "true");
+    }
+
     @SneakyThrows
     protected StatsQueue(Queue<T> queue, QueueConfiguration queueConfiguration)
     {
-        System.setProperty("disable.thread.safety", "true");
         if (queues.putIfAbsent(queueConfiguration.getPath().toString(), Boolean.TRUE) != null)
         {
             throw new IllegalArgumentException("Queue which appends to " + queueConfiguration.getPath() + " already exists");
@@ -92,6 +98,11 @@ public class StatsQueue<T> implements Queue<T>, BatchFlushable, Closeable
             this.batchBytes = Bytes.allocateDirect((long) queueConfiguration.getBatching().getBatchSize() * PROBE_SIZE);
             flusher.start();
             flusher.addFlushable(this);
+            if(queueConfiguration.isPreTouch())
+            {
+                pretoucherThread.start();
+                pretoucherThread.startPretouching(new PretouchHandler(new InternalPretouchHandler(chronicleQueue)));
+            }
         } catch (Exception e)
         {
             queues.remove(queueConfiguration.getPath().toString());

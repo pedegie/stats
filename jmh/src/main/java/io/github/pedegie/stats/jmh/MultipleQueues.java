@@ -72,7 +72,7 @@ public class MultipleQueues
         }
 
         @Benchmark
-        public void ConcurrentLinkedQueuesBenchmark(QueueConfiguration3 queueConfiguration) throws InterruptedException
+        public void ConcurrentLinkedQueuesBenchmark(QueueConfiguration3 queueConfiguration)
         {
             runBenchmark(queueConfiguration.concurrentQueueBenchmarks);
         }
