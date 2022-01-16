@@ -30,10 +30,13 @@ class ProbeTailerImpl implements ProbeTailer
     @NonFinal
     volatile long perBatchProbes;
 
-    public ProbeTailerImpl(TailerConfiguration tailerConfiguration)
+    static
     {
         System.setProperty("disable.thread.safety", "true");
+    }
 
+    public ProbeTailerImpl(TailerConfiguration tailerConfiguration)
+    {
         this.chronicleQueue = SingleChronicleQueueBuilder
                 .binary(tailerConfiguration.getPath())
                 .rollCycle(tailerConfiguration.getRollCycle())

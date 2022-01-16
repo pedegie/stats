@@ -24,9 +24,13 @@ public class ProbeTailerScheduler
     MediumEventLoop[] threadLoops;
     AtomicInteger roundRobinIndex = new AtomicInteger();
 
-    private ProbeTailerScheduler(int threads, int probeReadOnSingleAction)
+    static
     {
         System.setProperty("disable.thread.safety", "true");
+    }
+
+    private ProbeTailerScheduler(int threads, int probeReadOnSingleAction)
+    {
         this.probeReadOnSingleAction = probeReadOnSingleAction;
         this.threadLoops = new MediumEventLoop[threads];
         for (int i = 0; i < threads; i++)
