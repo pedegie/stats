@@ -126,11 +126,7 @@ See [Benchmarks section](#benchmarks)
 **Stats** keeps both probes in memory mapped file and batched data on off-heap, so it's not affected by Garbage Collector
 at all - there is no risk that after adding **Stats** library it increases GC impact.
 
-Probes are stored in simple format which consists of pairs `[ [ timestamp, size ], [ timestamp, size ] ]`, there is
-coming `CompressedProbeAccess` which handles it little differently - it puts starting timestamp in first probe record
-and then every next probe just contains a difference between "now" and starting timestamp, so we can keep timestamps in
-`int` instead of `long` - and its huge performance gain, due to less frequent requirement for pre-touching memory mapped files,
-obvious bonus is that this format just takes less space.
+Probes are stored in simple format which consists of continuously pairs `[ [ timestamp, size ], [ timestamp, size ] ]`.
 
 #### Flusher
 `Flusher` is a thread working in background. His responsibility is to flush data batched by all writers.
