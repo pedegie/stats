@@ -29,7 +29,7 @@ public class QueueConfiguration
     @Builder.Default
     boolean preTouch = true;
     @Builder.Default
-    WriteFilter writeFilter = WriteFilter.acceptAllFilter;
+    WriteFilter writeFilter = WriteFilter.acceptAll();
     @Builder.Default
     FileAccessErrorHandler errorHandler = FileAccessErrorHandler.logAndIgnore();
     @Builder.Default
