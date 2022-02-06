@@ -1,10 +1,11 @@
 package io.github.pedegie.stats.api.queue
 
-
 import io.github.pedegie.stats.api.tailer.ProbeTailer
 import io.github.pedegie.stats.api.tailer.TailerFactory
 import net.openhft.chronicle.core.OS
 import spock.lang.Specification
+
+import java.util.stream.IntStream
 
 class WriteFilterTest extends Specification
 {
@@ -64,5 +65,28 @@ class WriteFilterTest extends Specification
             ProbeTailer tailer = TailerFactory.tailerFor(TestQueueUtil.PATH)
             tailer.probes() == 5
             tailer.close()
+    }
+
+    def "should correctly cache sized write filters"()
+    {
+        given:
+            int writeFiltersCacheSize = 6
+            List<WriteFilter> writeFilters = IntStream
+                    .range(1, writeFiltersCacheSize + 1)
+                    .collect { WriteFilter.acceptWhenSizeHigherThan(it) }
+        when:
+            List<WriteFilter> newWriteFilters = IntStream
+                    .range(1, writeFiltersCacheSize + 1)
+                    .collect { WriteFilter.acceptWhenSizeHigherThan(it) }
+        then:
+            IntStream.range(0, writeFiltersCacheSize)
+                    .collect { writeFilters.get(it).is(newWriteFilters.get(it)) }
+                    .stream()
+                    .allMatch { it }
+        when:
+            WriteFilter unCachedWriteFilter = WriteFilter.acceptWhenSizeHigherThan(writeFiltersCacheSize + 1)
+        then:
+            writeFilters.stream()
+                    .noneMatch { unCachedWriteFilter.is(it) }
     }
 }
